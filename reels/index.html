@@ -8,6 +8,9 @@
 <meta name="theme-color" content="#0b0a0f">
 <link rel="icon" href="/favicon.ico" sizes="any">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400..800&family=Instrument+Serif:ital@1&display=swap">
 <style>
   :root {
     --bg: #0b0a0f;
@@ -26,8 +29,14 @@
   }
   * { box-sizing: border-box; }
   body {
-    margin: 0; min-height: 100vh; background: var(--bg); color: var(--text);
-    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    margin: 0; min-height: 100vh; color: var(--text);
+    background:
+      radial-gradient(900px 500px at 10% -10%, rgba(255,46,77,.22), transparent 60%),
+      radial-gradient(700px 500px at 100% 0%, rgba(214,47,208,.14), transparent 60%),
+      radial-gradient(800px 600px at 50% 110%, rgba(255,138,61,.10), transparent 60%),
+      var(--bg);
+    background-attachment: fixed;
+    font: 15px/1.5 Geist, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
     -webkit-font-smoothing: antialiased;
   }
   button, select, input { font: inherit; color: inherit; }
@@ -41,15 +50,23 @@
   header a { color: var(--muted); font-size: 14px; text-decoration: none; }
   header a:hover { color: var(--text); }
 
-  h1 { margin: 0 0 6px; font-size: 28px; letter-spacing: -.02em; }
+  h1 { margin: 0 0 8px; font-size: clamp(32px, 5vw, 46px); line-height: 1.05; letter-spacing: -.035em; font-weight: 750; }
+  h1 em { font-family: "Instrument Serif", Georgia, serif; font-weight: 400; font-style: italic; letter-spacing: -.01em; background: linear-gradient(90deg, #ff2e4d, #ff8a3d, #d62fd0); -webkit-background-clip: text; background-clip: text; color: transparent; padding-right: .05em; }
+  .tags { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 22px; }
+  .tags span { padding: 5px 11px; border-radius: 999px; border: 1px solid var(--line-2); background: rgba(255,255,255,.04); color: var(--muted); font-size: 13px; }
   .lead { margin: 0 0 22px; color: var(--muted); }
 
   .drop {
     display: grid; place-items: center; gap: 6px; padding: 36px 16px; text-align: center;
-    border: 1.5px dashed var(--line-2); border-radius: 18px; background: var(--panel);
-    cursor: pointer; transition: border-color .2s, background .2s;
+    border: 1.5px dashed var(--line-2); border-radius: 20px;
+    background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.015));
+    box-shadow: 0 30px 60px -30px rgba(0,0,0,.8), inset 0 1px 0 rgba(255,255,255,.05);
+    cursor: pointer; transition: border-color .2s, background .2s, box-shadow .2s;
   }
-  .drop:hover, .drop.over { border-color: var(--red); background: #1a1520; }
+  .drop:hover, .drop.over { border-color: var(--red); background: linear-gradient(180deg, rgba(255,46,77,.1), rgba(255,46,77,.03)); box-shadow: 0 0 0 4px rgba(255,46,77,.12), 0 30px 60px -30px rgba(0,0,0,.8); }
+  .drop-icon { display: grid; place-items: center; width: 56px; height: 56px; margin-bottom: 6px; border-radius: 16px; background: linear-gradient(135deg, #ff2e4d, #ff8a3d 55%, #d62fd0); box-shadow: 0 12px 30px -8px rgba(255,46,77,.7); transition: transform .25s; }
+  .drop:hover .drop-icon, .drop.over .drop-icon { transform: translateY(-3px) scale(1.04); }
+  .drop .drop-icon svg { color: #fff; width: 26px; height: 26px; }
   .drop:focus-within { outline: 2px solid #ff8796; outline-offset: 2px; }
   .drop strong { font-size: 17px; }
   .drop small { color: var(--faint); }
@@ -74,13 +91,15 @@
   .btn:hover:not(:disabled) { border-color: rgba(255,255,255,.28); }
   .btn:disabled { opacity: .45; cursor: default; }
   .btn:focus-visible { outline: 2px solid #ff8796; outline-offset: 2px; }
-  .btn.primary { border-color: transparent; background: var(--grad); color: #fff; }
+  .btn.primary { border-color: transparent; background: var(--grad); color: #fff; box-shadow: 0 10px 26px -10px rgba(255,46,77,.8), inset 0 1px 0 rgba(255,255,255,.3); }
   .btn.primary:hover:not(:disabled) { filter: brightness(1.08); }
   .btn.done { background: rgba(62,227,154,.14); border-color: rgba(62,227,154,.5); color: var(--ok); }
   .btn svg { width: 16px; height: 16px; }
 
   .list { display: grid; gap: 14px; }
-  .item { display: grid; grid-template-columns: 96px minmax(0,1fr); gap: 16px; padding: 14px; border-radius: 16px; background: var(--panel); border: 1px solid var(--line); }
+  .item { display: grid; grid-template-columns: 96px minmax(0,1fr); gap: 16px; padding: 14px; border-radius: 18px; background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02)); border: 1px solid var(--line); box-shadow: 0 24px 50px -30px rgba(0,0,0,.9); transition: border-color .2s; animation: rise .4s ease-out both; }
+  .item:hover { border-color: var(--line-2); }
+  @keyframes rise { from { opacity: 0; translate: 0 10px; } }
   .poster { width: 96px; aspect-ratio: 9 / 16; border-radius: 10px; background: var(--panel-2); object-fit: cover; }
   .item-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
   .name { margin: 0; font-weight: 600; word-break: break-all; }
@@ -100,7 +119,8 @@
   @keyframes spin { to { transform: rotate(360deg); } }
   .sheets { display: flex; gap: 6px; margin-top: 12px; overflow-x: auto; padding-bottom: 4px; }
   .sheets a { flex: none; }
-  .sheets img { height: 72px; border-radius: 6px; border: 1px solid var(--line-2); display: block; }
+  .sheets img { height: 72px; border-radius: 6px; border: 1px solid var(--line-2); display: block; transition: transform .2s, border-color .2s; }
+  .sheets a:hover img { transform: translateY(-2px); border-color: #ff8796; }
 
   .note { margin-top: 18px; color: var(--faint); font-size: 13px; }
   .toast {
@@ -131,11 +151,12 @@
     <a href="/">YouTube transcripts →</a>
   </header>
 
-  <h1>Break down any reel</h1>
+  <h1>Break down any <em>reel</em></h1>
   <p class="lead">Drop in video files. You get a timestamped transcript, frame-by-frame picture sheets and sound hits, ready to paste into Claude. Everything runs on your computer and it's free.</p>
+  <div class="tags"><span>Timestamped words</span><span>Frame-by-frame sheets</span><span>Sound hits</span><span>One-click copy for Claude</span></div>
 
   <label class="drop" id="drop">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></svg>
+    <span class="drop-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></svg></span>
     <strong>Drop videos here, or click to choose</strong>
     <small>MP4, MOV or WEBM · as many as you like</small>
     <input type="file" id="file" accept="video/*" multiple>
