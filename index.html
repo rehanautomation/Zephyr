@@ -764,13 +764,16 @@ function closeRun(scroll = true) {
   if (scroll) { scrollTo({ top: 0, behavior: reducedMotion ? 'auto' : 'smooth' }); el.input.focus({ preventScroll: true }); }
 }
 
+// What a copy puts on the clipboard: the video's title, its link, then the transcript
+function clipText(run, id) {
+  const it = run.items[id];
+  return `${it.title || 'YouTube video'}\nhttps://www.youtube.com/watch?v=${id}\n\n${it.transcript}`;
+}
+
 async function copyRun(run, btn, restore) {
   const ready = run.ids.filter(id => run.items[id]?.transcript);
   if (!ready.length) return toast('Nothing to copy yet', 'warn');
-  const text = ready.map(id => {
-    const it = run.items[id];
-    return `${it.title || 'YouTube video'}\nhttps://www.youtube.com/watch?v=${id}\n\n${it.transcript}`;
-  }).join('\n\n---\n\n');
+  const text = ready.map(id => clipText(run, id)).join('\n\n---\n\n');
   try {
     await writeClipboard(text);
     toast(ready.length === run.ids.length ? `Copied ${plural(ready.length, 'transcript')}` : `Copied ${ready.length} of ${run.ids.length} transcripts`);
@@ -880,7 +883,7 @@ function renderCard(run, vid, card = cards.get(vid)) {
 
 async function copyOne(run, vid, btn) {
   try {
-    await writeClipboard(run.items[vid].transcript);
+    await writeClipboard(clipText(run, vid));
     flashDone(btn, 'Copied', () => renderCard(run, vid));
     toast('Transcript copied');
   } catch {
