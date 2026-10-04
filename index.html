@@ -85,6 +85,8 @@
     color: var(--muted); font-size: 13px; font-weight: 550; cursor: pointer;
     transition: color .2s, border-color .2s, background .2s;
   }
+  .nav { display: flex; gap: 8px; }
+  a.nav-btn { text-decoration: none; }
   .nav-btn:hover { color: var(--text); border-color: var(--line-2); background: var(--glass-2); }
   .nav-btn .n { display: grid; place-items: center; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; background: var(--grad); color: #fff; font: 600 11px var(--mono); }
 
@@ -470,7 +472,10 @@
       </svg>
       Zephyr
     </a>
-    <button class="nav-btn" type="button" id="toRecent" hidden>Recent <span class="n"></span></button>
+    <nav class="nav">
+      <a class="nav-btn" href="/reels/">Reels tool</a>
+      <button class="nav-btn" type="button" id="toRecent" hidden>Recent <span class="n"></span></button>
+    </nav>
   </header>
 
   <div class="hero-wrap">
