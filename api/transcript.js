@@ -63,12 +63,17 @@ async function getMeta(id) {
 }
 
 // Transcript via Supadata (YouTube blocks Vercel servers directly)
-async function getViaSupadata(id, key) {
-  const [r, meta] = await Promise.all([
-    fetch(`https://api.supadata.ai/v1/youtube/transcript?videoId=${id}&text=true`, { headers: { 'x-api-key': key } }),
-    getMeta(id)
-  ]);
-  const d = await r.json().catch(() => ({}));
+// Tries each key in order; moves to the next one when a key is out of credits or rejected
+async function getViaSupadata(id, keys) {
+  const metaP = getMeta(id);
+  let r, d;
+  for (let i = 0; i < keys.length; i++) {
+    r = await fetch(`https://api.supadata.ai/v1/youtube/transcript?videoId=${id}&text=true`, { headers: { 'x-api-key': keys[i] } });
+    d = await r.json().catch(() => ({}));
+    if (![401, 402, 403, 429].includes(r.status)) break;
+  }
+  const meta = await metaP;
+  if (r.status === 402 || r.status === 429) throw fail(429, 'All Supadata keys are out of credits');
   if (!r.ok) throw fail(r.status === 404 ? 404 : r.status, d.message || d.error || `Transcript service error ${r.status}`);
   const transcript = String(d.content || '').replace(/\s+/g, ' ').trim();
   if (!transcript) throw fail(404, 'This video has no captions');
@@ -78,17 +83,22 @@ async function getViaSupadata(id, key) {
 export default async function handler(req, res) {
   const id = String(req.query.id || '').trim();
   if (!/^[\w-]{11}$/.test(id)) return res.status(400).json({ error: 'Not a valid YouTube link' });
-  const key = process.env.SUPADATA_API_KEY;
+  // Keys from SUPADATA_API_KEY, SUPADATA_API_KEY_2, SUPADATA_API_KEY_3, ... (used in that order)
+  const keys = Object.keys(process.env)
+    .filter(n => /^SUPADATA_API_KEY(_\d+)?$/.test(n))
+    .sort((a, b) => (+(a.split('_')[3] || 1)) - (+(b.split('_')[3] || 1)))
+    .map(n => process.env[n].trim())
+    .filter(Boolean);
 
   let lastErr;
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      const out = key ? await getViaSupadata(id, key) : await getTranscript(id);
+      const out = keys.length ? await getViaSupadata(id, keys) : await getTranscript(id);
       res.setHeader('Cache-Control', 's-maxage=86400, stale-while-revalidate');
       return res.status(200).json(out);
     } catch (e) {
       lastErr = e;
-      if (e.status === 404) break; // no point retrying a video with no captions
+      if (e.status === 404 || e.status === 429) break; // no captions / out of credits: retrying won't help
     }
   }
   res.status(lastErr.status || 502).json({ error: lastErr.message || 'Could not reach YouTube' });
