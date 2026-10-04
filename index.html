@@ -1,0 +1,441 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Zephyr</title>
+<meta name="description" content="Paste YouTube links and copy each video's transcript in one click.">
+<meta name="theme-color" content="#d61f3a">
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<style>
+  :root {
+    --bg: #f6f6f7;
+    --surface: #ffffff;
+    --surface-2: #f0f0f2;
+    --text: #17171a;
+    --muted: #6b6b75;
+    --border: #e3e3e8;
+    --accent: #d61f3a;
+    --accent-hover: #b8172f;
+    --on-accent: #ffffff;
+    --ok: #12855a;
+    --danger: #c4283c;
+    --ring: rgba(214, 31, 58, .35);
+    --shadow: 0 1px 2px rgba(0,0,0,.04), 0 4px 16px rgba(0,0,0,.05);
+    --radius: 14px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0e0e10;
+      --surface: #18181b;
+      --surface-2: #222226;
+      --text: #f2f2f4;
+      --muted: #9a9aa5;
+      --border: #2c2c31;
+      --accent: #f0364f;
+      --accent-hover: #ff5268;
+      --ok: #3ccf91;
+      --danger: #ff6b7d;
+      --ring: rgba(240, 54, 79, .45);
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 4px 16px rgba(0,0,0,.25);
+    }
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  button, textarea { font: inherit; color: inherit; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 40px 16px 64px; }
+
+  header { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; }
+  header svg { width: 40px; height: 40px; flex: none; border-radius: 10px; }
+  header h1 { margin: 0; font-size: 22px; line-height: 1.2; letter-spacing: -.01em; }
+  header p { margin: 2px 0 0; color: var(--muted); font-size: 14px; }
+
+  .input {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 12px;
+  }
+  .input:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--ring); }
+  textarea {
+    display: block;
+    width: 100%;
+    min-height: 88px;
+    resize: vertical;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    padding: 4px 6px;
+  }
+  textarea::placeholder { color: var(--muted); }
+  .input-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 8px; }
+  .hint { color: var(--muted); font-size: 13px; padding-left: 6px; }
+  .hint.warn { color: var(--danger); }
+
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    min-height: 38px; padding: 0 16px;
+    border: 1px solid var(--border); border-radius: 10px;
+    background: var(--surface); cursor: pointer; white-space: nowrap;
+    font-weight: 550; font-size: 14px;
+    transition: background-color .15s, border-color .15s, color .15s;
+  }
+  .btn:hover { background: var(--surface-2); }
+  .btn:focus-visible { outline: 0; box-shadow: 0 0 0 3px var(--ring); }
+  .btn:disabled { opacity: .55; cursor: default; }
+  .btn svg { width: 16px; height: 16px; flex: none; }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+  .btn.primary:hover:not(:disabled) { background: var(--accent-hover); border-color: var(--accent-hover); }
+  .btn.done { color: var(--ok); border-color: var(--ok); background: var(--surface); }
+  .btn.primary.done { background: var(--ok); border-color: var(--ok); color: #fff; }
+  .btn.ghost { border-color: transparent; background: transparent; color: var(--muted); }
+  .btn.ghost:hover { background: var(--surface-2); color: var(--text); }
+
+  .toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 28px 0 14px; }
+  .toolbar[hidden] { display: none; }
+  .count { color: var(--muted); font-size: 14px; }
+  .toolbar .actions { display: flex; gap: 8px; }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
+  .card {
+    display: flex; flex-direction: column;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+    animation: rise .25s ease-out;
+  }
+  .card.flash { animation: flash .9s ease-out; }
+  @keyframes rise { from { opacity: 0; transform: translateY(6px); } }
+  @keyframes flash { 0%, 40% { border-color: var(--accent); box-shadow: 0 0 0 3px var(--ring); } }
+
+  .thumb { position: relative; display: block; aspect-ratio: 16 / 9; overflow: hidden; background: var(--surface-2); }
+  .thumb img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+  .badge {
+    position: absolute; right: 8px; bottom: 8px;
+    padding: 2px 8px; border-radius: 6px;
+    background: rgba(0,0,0,.78); color: #fff;
+    font-size: 12px; font-weight: 600;
+  }
+  .badge:empty { display: none; }
+
+  .body { display: flex; flex-direction: column; flex: 1; padding: 12px 14px 14px; gap: 2px; }
+  .title {
+    margin: 0; font-size: 15px; font-weight: 600; line-height: 1.35;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+    min-height: 2.7em;
+  }
+  .meta { margin: 0; color: var(--muted); font-size: 13px; min-height: 1.5em; }
+  .err { margin: 6px 0 0; color: var(--danger); font-size: 13px; }
+  .err:empty { display: none; }
+  .card-actions { display: flex; gap: 8px; margin-top: auto; padding-top: 12px; }
+  .card-actions .copy { flex: 1; }
+  .card-actions .remove { padding: 0 10px; }
+
+  .card[data-state="loading"] .title,
+  .card[data-state="loading"] .meta { color: transparent; }
+  .card[data-state="loading"] .title::before,
+  .card[data-state="loading"] .meta::before {
+    content: ""; display: block; height: .9em; margin-top: .3em; border-radius: 4px;
+    background: linear-gradient(90deg, var(--surface-2), var(--border), var(--surface-2));
+    background-size: 200% 100%; animation: shimmer 1.2s linear infinite;
+  }
+  .card[data-state="loading"] .title::before { width: 85%; }
+  .card[data-state="loading"] .meta::before { width: 45%; }
+  @keyframes shimmer { to { background-position: -200% 0; } }
+  .spin { animation: spin .8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .empty { margin-top: 28px; text-align: center; color: var(--muted); font-size: 14px; }
+  .empty[hidden] { display: none; }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+  @media (max-width: 520px) {
+    .wrap { padding-top: 24px; }
+    .input-row { flex-direction: column; align-items: stretch; }
+    .hint { padding-left: 0; text-align: center; }
+    .toolbar { flex-wrap: wrap; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before { animation-duration: 0s !important; animation-iteration-count: 1 !important; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <svg viewBox="0 0 32 32" aria-hidden="true">
+      <defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff4d4d"/><stop offset="1" stop-color="#c8102e"/></linearGradient></defs>
+      <rect width="32" height="32" rx="7" fill="url(#lg)"/>
+      <path fill="#fff" d="M4,6H8.3L10,10.25L11.7,6H16L12,16V26H8V16ZM16,6H28V10H24V26H20V10H16Z"/>
+    </svg>
+    <div>
+      <h1>Zephyr</h1>
+      <p>Paste YouTube links. Copy transcripts.</p>
+    </div>
+  </header>
+
+  <form class="input" id="form">
+    <label for="links" class="sr">YouTube links</label>
+    <textarea id="links" placeholder="Paste one or more YouTube links…" spellcheck="false" autocomplete="off"></textarea>
+    <div class="input-row">
+      <span class="hint" id="hint">Works with youtube.com, youtu.be, Shorts and live links</span>
+      <button class="btn primary" type="submit">Add videos</button>
+    </div>
+  </form>
+
+  <div class="toolbar" id="toolbar" hidden>
+    <span class="count" id="count"></span>
+    <div class="actions">
+      <button class="btn" type="button" id="copyAll" disabled></button>
+      <button class="btn ghost" type="button" id="clear">Clear</button>
+    </div>
+  </div>
+
+  <main class="grid" id="grid"></main>
+  <p class="empty" id="empty">Your videos will show up here.</p>
+  <div class="sr" aria-live="polite" id="live"></div>
+</div>
+
+<script>
+const ICON = {
+  copy: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/></svg>',
+  check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>',
+  spin: '<svg class="spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 12a9 9 0 1 1-6.2-8.56"/></svg>',
+  retry: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 15.5-6.2L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15.5 6.2L3 16"/><path d="M3 21v-5h5"/></svg>',
+  x: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>'
+};
+
+const $ = id => document.getElementById(id);
+const form = $('form'), input = $('links'), hint = $('hint'), grid = $('grid');
+const toolbar = $('toolbar'), count = $('count'), copyAllBtn = $('copyAll'), clearBtn = $('clear'), empty = $('empty'), live = $('live');
+const HINT = hint.textContent;
+
+const videos = new Map(); // id -> { id, el, state, data, error }
+const queue = [];
+let active = 0;
+const MAX_PARALLEL = 3;
+
+// Pull 11-character video IDs out of any mix of YouTube URLs
+function parseIds(text) {
+  const re = /(?:youtube(?:-nocookie)?\.com\/(?:watch\?(?:[^\s#]*?&)?v=|shorts\/|embed\/|live\/|v\/)|youtu\.be\/)([\w-]{11})(?![\w-])/g;
+  const ids = [];
+  for (const m of text.matchAll(re)) if (!ids.includes(m[1])) ids.push(m[1]);
+  return ids;
+}
+
+function setHint(text, warn) {
+  hint.textContent = text;
+  hint.classList.toggle('warn', !!warn);
+}
+
+function addFromInput() {
+  const text = input.value.trim();
+  if (!text) return;
+  const ids = parseIds(text);
+  if (!ids.length) { setHint('No YouTube links found in that text', true); return; }
+  let added = 0;
+  for (const id of ids) {
+    if (videos.has(id)) { flash(videos.get(id).el); continue; }
+    addVideo(id);
+    added++;
+  }
+  input.value = '';
+  setHint(HINT);
+  if (added) live.textContent = `Added ${added} video${added > 1 ? 's' : ''}`;
+  else setHint('Already in your list', false);
+  update();
+}
+
+function addVideo(id) {
+  const el = document.createElement('article');
+  el.className = 'card';
+  el.innerHTML = `
+    <a class="thumb" target="_blank" rel="noopener">
+      <img alt="" loading="lazy" decoding="async" width="480" height="270">
+      <span class="badge"></span>
+    </a>
+    <div class="body">
+      <h2 class="title"></h2>
+      <p class="meta"></p>
+      <p class="err" role="alert"></p>
+      <div class="card-actions">
+        <button class="btn copy" type="button"></button>
+        <button class="btn ghost remove" type="button" aria-label="Remove video">${ICON.x}</button>
+      </div>
+    </div>`;
+  const url = `https://www.youtube.com/watch?v=${id}`;
+  el.querySelector('.thumb').href = url;
+  const img = el.querySelector('img');
+  img.addEventListener('error', () => { img.style.visibility = 'hidden'; }); // keep the plain placeholder, not alt text
+  img.src = `https://i.ytimg.com/vi/${id}/hqdefault.jpg`;
+  const v = { id, el, state: 'loading', data: null, error: '' };
+  el.querySelector('.copy').addEventListener('click', () => v.state === 'error' ? retry(v) : copyOne(v));
+  el.querySelector('.remove').addEventListener('click', () => removeVideo(id));
+  videos.set(id, v);
+  grid.prepend(el);
+  render(v);
+  enqueue(v);
+}
+
+function enqueue(v) { queue.push(v); pump(); }
+
+function pump() {
+  while (active < MAX_PARALLEL && queue.length) {
+    const v = queue.shift();
+    if (videos.get(v.id) !== v) continue; // removed while waiting
+    active++;
+    load(v).finally(() => { active--; pump(); });
+  }
+}
+
+async function load(v) {
+  try {
+    const r = await fetch(`/api/transcript?id=${encodeURIComponent(v.id)}`);
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || `Something went wrong (error ${r.status})`);
+    v.data = d;
+    v.state = 'ready';
+  } catch (e) {
+    v.error = e instanceof TypeError ? 'Network error. Check your connection.' : e.message;
+    v.state = 'error';
+  }
+  if (videos.get(v.id) === v) { render(v); update(); }
+}
+
+function retry(v) {
+  v.state = 'loading';
+  v.error = '';
+  render(v);
+  update();
+  enqueue(v);
+}
+
+function render(v) {
+  const { el, data } = v;
+  el.dataset.state = v.state;
+  const title = data?.title || (v.state === 'error' ? 'YouTube video' : '');
+  el.querySelector('.title').textContent = title || 'Loading';
+  el.querySelector('.title').title = title;
+  el.querySelector('img').alt = title;
+  el.querySelector('.meta').textContent = data?.author || (v.state === 'loading' ? 'Loading' : '');
+  el.querySelector('.badge').textContent = data?.words ? `${data.words.toLocaleString()} words` : '';
+  el.querySelector('.err').textContent = v.error;
+  const btn = el.querySelector('.copy');
+  btn.classList.remove('done');
+  btn.classList.toggle('primary', v.state !== 'error');
+  btn.disabled = v.state === 'loading';
+  btn.innerHTML = v.state === 'loading' ? `${ICON.spin}Getting transcript`
+    : v.state === 'error' ? `${ICON.retry}Try again`
+    : `${ICON.copy}Copy transcript`;
+}
+
+function removeVideo(id) {
+  const v = videos.get(id);
+  if (!v) return;
+  v.el.remove();
+  videos.delete(id);
+  update();
+}
+
+function flash(el) {
+  el.classList.remove('flash');
+  void el.offsetWidth;
+  el.classList.add('flash');
+  el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function update() {
+  const all = [...videos.values()];
+  const ready = all.filter(v => v.state === 'ready');
+  const loading = all.filter(v => v.state === 'loading').length;
+  toolbar.hidden = !all.length;
+  empty.hidden = !!all.length;
+  count.textContent = `${all.length} video${all.length === 1 ? '' : 's'}` + (loading ? ` · ${loading} loading` : '');
+  if (!copyAllBtn.classList.contains('done')) {
+    copyAllBtn.innerHTML = `${ICON.copy}Copy all${ready.length > 1 ? ` (${ready.length})` : ''}`;
+  }
+  copyAllBtn.disabled = !ready.length;
+}
+
+async function writeClipboard(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch {
+    // Fallback for browsers or contexts without the async clipboard API
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0';
+    document.body.append(ta);
+    ta.select();
+    const ok = document.execCommand('copy');
+    ta.remove();
+    if (!ok) throw new Error('Copy failed');
+  }
+}
+
+function confirmCopied(btn, label, restore) {
+  btn.classList.add('done');
+  btn.innerHTML = `${ICON.check}${label}`;
+  clearTimeout(btn._t);
+  btn._t = setTimeout(() => { btn.classList.remove('done'); restore(); }, 1600);
+}
+
+async function copyOne(v) {
+  if (v.state !== 'ready') return;
+  const btn = v.el.querySelector('.copy');
+  try {
+    await writeClipboard(v.data.transcript);
+    confirmCopied(btn, 'Copied', () => render(v));
+    live.textContent = 'Transcript copied';
+  } catch {
+    v.el.querySelector('.err').textContent = 'Could not copy. Your browser blocked clipboard access.';
+  }
+}
+
+copyAllBtn.addEventListener('click', async () => {
+  // Same order as on screen (newest first)
+  const ready = [...grid.children].map(el => [...videos.values()].find(v => v.el === el)).filter(v => v?.state === 'ready');
+  if (!ready.length) return;
+  const text = ready.map(v => `${v.data.title || 'YouTube video'}\nhttps://www.youtube.com/watch?v=${v.id}\n\n${v.data.transcript}`).join('\n\n---\n\n');
+  try {
+    await writeClipboard(text);
+    confirmCopied(copyAllBtn, `Copied ${ready.length}`, update);
+    live.textContent = `${ready.length} transcripts copied`;
+  } catch {
+    setHint('Could not copy. Your browser blocked clipboard access.', true);
+  }
+});
+
+clearBtn.addEventListener('click', () => {
+  queue.length = 0;
+  videos.clear();
+  grid.replaceChildren();
+  update();
+  input.focus();
+});
+
+form.addEventListener('submit', e => { e.preventDefault(); addFromInput(); });
+input.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); addFromInput(); }
+});
+// Pasting links adds them right away
+input.addEventListener('paste', () => setTimeout(() => { if (parseIds(input.value).length) addFromInput(); }));
+input.addEventListener('input', () => { if (hint.classList.contains('warn')) setHint(HINT); });
+
+update();
+input.focus();
+</script>
+</body>
+</html>
