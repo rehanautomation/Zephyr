@@ -135,6 +135,29 @@
     .poster { width: 64px; }
     .bar .actions, .bar .actions .btn { width: 100%; }
   }
+
+  .bar { flex-direction: column; align-items: stretch; }
+  .bar-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+  .warn { margin: 0; padding: 10px 14px; border-radius: 12px; border: 1px solid rgba(255,107,125,.4); background: rgba(255,107,125,.08); color: #ffc2ca; font-size: 14px; }
+  .btn.small { height: 32px; padding: 0 11px; font-size: 13px; border-radius: 9px; }
+  .btn.tiny { height: 26px; padding: 0 8px; font-size: 12px; border-radius: 7px; gap: 5px; }
+  .btn.tiny svg, .btn.small svg { width: 14px; height: 14px; }
+  .btn.ghost { background: transparent; border-color: transparent; color: var(--muted); }
+  .btn.ghost:hover:not(:disabled) { color: var(--text); border-color: var(--line-2); }
+  .item-main { min-width: 0; }
+  .item-actions { display: flex; align-items: center; gap: 4px; flex: none; }
+  .sheets { gap: 10px; }
+  .sheets figure { margin: 0; flex: none; display: grid; gap: 6px; }
+  .sheets img { height: 96px; }
+  .sheets figcaption { display: flex; align-items: center; justify-content: space-between; gap: 6px; color: var(--faint); font-size: 12px; max-width: 160px; }
+  .sheets figcaption span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .how { margin: 18px 0 0; padding: 0 0 0 18px; color: var(--faint); font-size: 13px; }
+  .how li { margin: 3px 0; }
+  .how b { color: var(--muted); }
+  @media (max-width: 560px) {
+    .item-head { flex-direction: column; }
+    .bar-top .actions, .bar-top .actions .btn { width: 100%; }
+  }
 </style>
 </head>
 <body>
@@ -152,559 +175,48 @@
   </header>
 
   <h1>Break down any <em>reel</em></h1>
-  <p class="lead">Drop in video files. You get a timestamped transcript, frame-by-frame picture sheets and sound hits, ready to paste into Claude. Everything runs on your computer and it's free.</p>
-  <div class="tags"><span>Timestamped words</span><span>Frame-by-frame sheets</span><span>Sound hits</span><span>One-click copy for Claude</span></div>
+  <p class="lead">Drop in video files. Zephyr finds every cut, zoom, caption style, animation, graphic screen and sound effect, then packs it into a short text plus a few labelled pictures for Claude. It all runs on your computer and it's free.</p>
+  <div class="tags"><span>Caption styles &amp; animations</span><span>Cuts, zooms &amp; flashes</span><span>Graphic screen builds</span><span>Labelled sound effects</span><span>Timestamped words</span></div>
 
   <label class="drop" id="drop">
     <span class="drop-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></svg></span>
     <strong>Drop videos here, or click to choose</strong>
-    <small>MP4, MOV or WEBM · as many as you like</small>
+    <small>MP4, MOV or WEBM · one or many</small>
     <input type="file" id="file" accept="video/*" multiple>
   </label>
 
   <div class="options">
-    <label>Frames per second
-      <select id="fps">
-        <option value="2">2</option>
-        <option value="4" selected>4</option>
-        <option value="6">6</option>
-        <option value="8">8</option>
+    <label>Transcript
+      <select id="quality">
+        <option value="fast">Fast</option>
+        <option value="accurate" selected>Accurate (bigger one-time download, slower)</option>
       </select>
     </label>
-    <label><input type="checkbox" id="dedupe" checked> Skip frames where nothing changed</label>
   </div>
 
   <div class="bar" id="bar" hidden>
-    <span class="count" id="count"></span>
-    <div class="actions">
-      <button class="btn primary" type="button" id="copyAll" disabled>Copy all for Claude</button>
-      <button class="btn" type="button" id="zip" disabled>Download frame images (.zip)</button>
+    <div class="bar-top">
+      <span class="count" id="count"></span>
+      <div class="actions">
+        <button class="btn primary" type="button" id="copyText" disabled>Copy text</button>
+        <button class="btn primary" type="button" id="getImages" disabled>Get images</button>
+        <button class="btn" type="button" id="zip" disabled>Download .zip</button>
+        <button class="btn ghost" type="button" id="clear">Clear all</button>
+      </div>
     </div>
+    <p class="warn" id="warn" hidden></p>
   </div>
 
   <div class="list" id="list"></div>
 
-  <p class="note">How to use with Claude: click <b>Copy all for Claude</b> and paste it, then unzip the frame images and drag them into the same message. The first transcript downloads a free speech model (about 80 MB) once; after that it's cached.</p>
+  <ol class="how">
+    <li><b>Copy text</b> and paste it into Claude.</li>
+    <li><b>Get images</b>: pick a folder once; the pictures are saved there. Open the folder, select all the images and drag them into the same Claude message. (Or use <b>Download .zip</b>, or the small Copy button under each picture.)</li>
+    <li>The first run downloads free analysis models (text reader, face finder, sound labeller and speech model). After that they're cached and start fast.</li>
+    <li>Keep this tab in front while it works; it runs slower in the background.</li>
+  </ol>
 </div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
-
-<!-- Speech-to-text runs in a background worker so the page stays responsive -->
-<script type="text/x-worker" id="asr-worker">
-import { pipeline } from 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.0/dist/transformers.min.js';
-
-let asr = null;
-function getAsr() {
-  if (!asr) {
-    asr = pipeline('automatic-speech-recognition', 'Xenova/whisper-base', {
-      device: 'wasm',
-      dtype: 'q8',
-      progress_callback: p => {
-        if (p.status === 'progress_total') postMessage({ type: 'model', progress: p.progress });
-      }
-    });
-    asr.catch(() => { asr = null; });
-  }
-  return asr;
-}
-
-async function handle({ id, audio }) {
-  try {
-    const run = await getAsr();
-    postMessage({ id, type: 'status', text: 'Transcribing' });
-    const opts = { chunk_length_s: 30, stride_length_s: 5 };
-    let out, words = true;
-    try {
-      out = await run(audio, { ...opts, return_timestamps: 'word' });
-    } catch {
-      words = false; // fall back to phrase-level timestamps
-      out = await run(audio, { ...opts, return_timestamps: true });
-    }
-    postMessage({ id, type: 'done', words, chunks: (out.chunks || []).map(c => ({ text: c.text, timestamp: c.timestamp })) });
-  } catch (e) {
-    postMessage({ id, type: 'error', error: String(e && e.message || e) });
-  }
-}
-
-let chain = Promise.resolve();
-self.onmessage = e => { chain = chain.then(() => handle(e.data)); };
-</script>
-
-<script>
-const ICON = {
-  check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>',
-  spin: '<svg class="spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 12a9 9 0 1 1-6.2-8.56"/></svg>',
-  alert: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.5v.01"/></svg>',
-  x: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>'
-};
-const $ = s => document.querySelector(s);
-const ui = { drop: $('#drop'), file: $('#file'), fps: $('#fps'), dedupe: $('#dedupe'), bar: $('#bar'), count: $('#count'), copyAll: $('#copyAll'), zip: $('#zip'), list: $('#list'), toast: $('#toast') };
-
-const FRAMES_PER_SHEET = 8;
-const MAX_FRAMES = 600;      // safety cap for long videos
-const videos = [];           // { n, file, name, duration, width, height, el, frames, sheets, hits, loudness, transcript, state }
-let counter = 0;
-
-/* ---------- Small helpers ---------- */
-const fmt = t => `${Math.floor(t / 60)}:${(t % 60).toFixed(2).padStart(5, '0')}`;
-const r2 = t => Math.round(t * 100) / 100;
-const pad = n => String(n).padStart(2, '0');
-const nextFrame = () => new Promise(r => requestAnimationFrame(() => r()));
-
-let toastTimer;
-function toast(msg) {
-  ui.toast.textContent = msg;
-  ui.toast.classList.add('show');
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => ui.toast.classList.remove('show'), 2200);
-}
-
-function once(target, event) {
-  return new Promise((resolve, reject) => {
-    const ok = () => { target.removeEventListener('error', bad); resolve(); };
-    const bad = () => { target.removeEventListener(event, ok); reject(new Error('This video format could not be read by your browser')); };
-    target.addEventListener(event, ok, { once: true });
-    target.addEventListener('error', bad, { once: true });
-  });
-}
-
-/* ---------- Worker ---------- */
-let worker = null;
-const jobs = new Map();
-let modelProgress = null;
-function getWorker() {
-  if (worker) return worker;
-  const src = document.getElementById('asr-worker').textContent;
-  worker = new Worker(URL.createObjectURL(new Blob([src], { type: 'text/javascript' })), { type: 'module' });
-  worker.onmessage = ({ data }) => {
-    if (data.type === 'model') {
-      modelProgress = data.progress;
-      for (const v of videos) if (v.state.transcript === 'run' && v.transcriptStatus === 'model') setStep(v, 'transcript', 'run', `Downloading speech model (one time) ${Math.round(data.progress)}%`);
-      return;
-    }
-    const job = jobs.get(data.id);
-    if (!job) return;
-    if (data.type === 'status') job.onStatus(data.text);
-    else { jobs.delete(data.id); data.type === 'done' ? job.resolve(data) : job.reject(new Error(data.error)); }
-  };
-  worker.onerror = e => {
-    for (const [, job] of jobs) job.reject(new Error(e.message || 'Speech engine failed to load'));
-    jobs.clear();
-    worker = null;
-  };
-  return worker;
-}
-function transcribe(v, audio) {
-  return new Promise((resolve, reject) => {
-    const id = `${v.n}-${Date.now()}`;
-    jobs.set(id, { resolve, reject, onStatus: text => { v.transcriptStatus = 'run'; setStep(v, 'transcript', 'run', text); } });
-    getWorker().postMessage({ id, audio }, [audio.buffer]);
-  });
-}
-
-/* ---------- UI per video ---------- */
-function addItem(v) {
-  const el = document.createElement('article');
-  el.className = 'item';
-  el.innerHTML = `
-    <img class="poster" alt="">
-    <div>
-      <div class="item-head">
-        <div><p class="name"></p><p class="info">Reading video…</p></div>
-        <button class="remove" type="button" aria-label="Remove video" title="Remove">${ICON.x}</button>
-      </div>
-      <ul class="steps">
-        <li data-k="frames"><span class="dot"></span><span class="txt">Frames</span></li>
-        <li data-k="sound"><span class="dot"></span><span class="txt">Sound hits</span></li>
-        <li data-k="transcript"><span class="dot"></span><span class="txt">Transcript</span></li>
-      </ul>
-      <div class="sheets"></div>
-    </div>`;
-  el.querySelector('.name').textContent = `Reel ${v.n} · ${v.name}`;
-  el.querySelector('.remove').addEventListener('click', () => removeItem(v));
-  v.el = el;
-  for (const k of ['frames', 'sound', 'transcript']) setStep(v, k, 'wait');
-  ui.list.append(el);
-}
-
-function setStep(v, key, s, text) {
-  v.state[key] = s;
-  const li = v.el.querySelector(`[data-k="${key}"]`);
-  li.dataset.s = s;
-  li.querySelector('.dot').innerHTML = s === 'done' ? ICON.check : s === 'run' ? ICON.spin : s === 'error' ? ICON.alert : '';
-  const label = { frames: 'Frames', sound: 'Sound hits', transcript: 'Transcript' }[key];
-  li.querySelector('.txt').textContent = text ? `${label}: ${text}` : label;
-  refresh();
-}
-
-function removeItem(v) {
-  v.removed = true;
-  v.el.remove();
-  for (const s of v.sheets || []) URL.revokeObjectURL(s.url);
-  videos.splice(videos.indexOf(v), 1);
-  refresh();
-}
-
-function refresh() {
-  ui.bar.hidden = !videos.length;
-  const busy = videos.filter(v => Object.values(v.state).some(s => s === 'run' || s === 'wait')).length;
-  ui.count.textContent = `${videos.length} video${videos.length === 1 ? '' : 's'}` + (busy ? ` · ${busy} working` : ' · ready');
-  const anyFrames = videos.some(v => v.sheets?.length);
-  ui.copyAll.disabled = !videos.some(v => v.state.frames === 'done');
-  ui.zip.disabled = !anyFrames;
-}
-
-/* ---------- Processing ---------- */
-let processing = Promise.resolve();
-function addFiles(files) {
-  for (const file of files) {
-    if (!file.type.startsWith('video/') && !/\.(mp4|mov|webm|m4v|mkv)$/i.test(file.name)) continue;
-    const v = { n: ++counter, file, name: file.name, state: {}, sheets: [], frames: [], hits: null, loudness: null, transcript: null };
-    videos.push(v);
-    addItem(v);
-    processing = processing.then(() => processVideo(v));
-  }
-}
-
-async function processVideo(v) {
-  if (v.removed) return;
-  const fps = +ui.fps.value;
-  const dedupe = ui.dedupe.checked;
-  const url = URL.createObjectURL(v.file);
-  try {
-    await extractFrames(v, url, fps, dedupe);
-  } catch (e) {
-    setStep(v, 'frames', 'error', e.message);
-  } finally {
-    URL.revokeObjectURL(url);
-  }
-  if (v.removed) return;
-
-  let audio = null;
-  setStep(v, 'sound', 'run', 'Listening');
-  try {
-    audio = await decodeAudio(v.file);
-    const { hits, loudness } = analyzeSound(audio);
-    v.hits = hits;
-    v.loudness = loudness;
-    setStep(v, 'sound', 'done', `${hits.length} sudden loud moment${hits.length === 1 ? '' : 's'}`);
-  } catch {
-    setStep(v, 'sound', 'error', 'No audio found in this video');
-    setStep(v, 'transcript', 'error', 'No audio to transcribe');
-    return;
-  }
-  // Transcription runs in the background while the next video's frames are extracted
-  v.transcriptStatus = 'model';
-  setStep(v, 'transcript', 'run', modelProgress === null || modelProgress < 100 ? 'Loading speech model (first time takes a minute)' : 'Waiting');
-  transcribe(v, audio).then(res => {
-    v.transcript = buildTranscript(res);
-    const n = v.transcript.words ? v.transcript.words.length : v.transcript.segments.reduce((s, x) => s + x.text.split(/\s+/).filter(Boolean).length, 0);
-    if (!v.removed) setStep(v, 'transcript', 'done', n ? `${n} words` : 'No speech detected');
-  }).catch(e => {
-    const msg = /fetch|network|load/i.test(e.message) ? "Couldn't download the speech model. Check your internet and add the video again" : e.message;
-    if (!v.removed) setStep(v, 'transcript', 'error', msg);
-  });
-}
-
-async function extractFrames(v, url, fps, dedupe) {
-  const video = document.createElement('video');
-  video.muted = true;
-  video.playsInline = true;
-  video.preload = 'auto';
-  video.src = url;
-  await once(video, 'loadeddata');
-  const duration = isFinite(video.duration) ? video.duration : 0;
-  v.duration = duration;
-  v.width = video.videoWidth;
-  v.height = video.videoHeight;
-  v.el.querySelector('.info').textContent = `${fmt(duration)} · ${v.width}×${v.height}`;
-
-  // Frame size inside a sheet: long side 640px keeps on-screen text readable
-  const scale = 640 / Math.max(v.width, v.height);
-  const fw = Math.round(v.width * scale), fh = Math.round(v.height * scale);
-  const cap = document.createElement('canvas');
-  cap.width = fw; cap.height = fh;
-  const cctx = cap.getContext('2d', { willReadFrequently: true });
-  const tiny = document.createElement('canvas');
-  tiny.width = 32; tiny.height = 32;
-  const tctx = tiny.getContext('2d', { willReadFrequently: true });
-
-  const step = 1 / fps;
-  let times = [];
-  for (let t = 0; t < duration - 0.001; t += step) times.push(r2(t));
-  if (times.length > MAX_FRAMES) times = times.filter((_, i) => i % Math.ceil(times.length / MAX_FRAMES) === 0);
-
-  let prev = null, lastKept = -Infinity;
-  const kept = [];
-  setStep(v, 'frames', 'run', `0 / ${times.length}`);
-  for (let i = 0; i < times.length; i++) {
-    if (v.removed) return;
-    const t = times[i];
-    video.currentTime = Math.min(t, Math.max(0, duration - 0.01));
-    await once(video, 'seeked');
-    cctx.drawImage(video, 0, 0, fw, fh);
-    tctx.drawImage(cap, 0, 0, 32, 32);
-    const px = tctx.getImageData(0, 0, 32, 32).data;
-    const gray = new Float32Array(1024);
-    for (let p = 0; p < 1024; p++) gray[p] = px[p * 4] * .3 + px[p * 4 + 1] * .59 + px[p * 4 + 2] * .11;
-    const changed = !prev || blockChange(prev, gray) > 10;
-    const isLast = i === times.length - 1;
-    if (!dedupe || changed || isLast || t - lastKept >= 1) {
-      const bmp = await createImageBitmap(cap);
-      kept.push({ t, bmp });
-      lastKept = t;
-      prev = gray;
-      if (kept.length === 1) v.el.querySelector('.poster').src = cap.toDataURL('image/jpeg', .7);
-    }
-    if (i % 4 === 0) { setStep(v, 'frames', 'run', `${i + 1} / ${times.length}`); await nextFrame(); }
-  }
-  v.frames = kept.map(f => f.t);
-  v.fps = fps;
-  v.deduped = dedupe;
-  v.sheets = await buildSheets(v, kept, fw, fh);
-  kept.forEach(f => f.bmp.close());
-  renderSheets(v);
-  setStep(v, 'frames', 'done', `${kept.length} frames on ${v.sheets.length} sheet${v.sheets.length === 1 ? '' : 's'}`);
-}
-
-// Largest average change across an 8x8 grid of blocks, so small pop-ups (text, stickers) still count
-function blockChange(a, b) {
-  let max = 0;
-  for (let by = 0; by < 8; by++) for (let bx = 0; bx < 8; bx++) {
-    let sum = 0;
-    for (let y = 0; y < 4; y++) for (let x = 0; x < 4; x++) {
-      const p = (by * 4 + y) * 32 + bx * 4 + x;
-      sum += Math.abs(a[p] - b[p]);
-    }
-    max = Math.max(max, sum / 16);
-  }
-  return max;
-}
-
-async function buildSheets(v, kept, fw, fh) {
-  const cols = v.height >= v.width ? 4 : 2;
-  const rows = Math.ceil(FRAMES_PER_SHEET / cols);
-  const gap = 8, head = 44;
-  const sheets = [];
-  const total = Math.ceil(kept.length / FRAMES_PER_SHEET);
-  for (let s = 0; s < total; s++) {
-    const group = kept.slice(s * FRAMES_PER_SHEET, (s + 1) * FRAMES_PER_SHEET);
-    const usedRows = Math.ceil(group.length / cols);
-    const canvas = document.createElement('canvas');
-    canvas.width = cols * fw + (cols + 1) * gap;
-    canvas.height = head + usedRows * fh + (usedRows + 1) * gap - gap;
-    const ctx = canvas.getContext('2d');
-    ctx.fillStyle = '#111';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = '#fff';
-    ctx.font = '600 22px system-ui, sans-serif';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(`Reel ${v.n} · sheet ${s + 1} of ${total} · ${fmt(group[0].t)} to ${fmt(group[group.length - 1].t)}`, gap + 4, head / 2);
-    group.forEach((f, i) => {
-      const x = gap + (i % cols) * (fw + gap);
-      const y = head + Math.floor(i / cols) * (fh + gap);
-      ctx.drawImage(f.bmp, x, y, fw, fh);
-      const label = fmt(f.t);
-      ctx.font = '700 24px system-ui, sans-serif';
-      const w = ctx.measureText(label).width + 16;
-      ctx.fillStyle = 'rgba(0,0,0,.78)';
-      ctx.fillRect(x + 6, y + 6, w, 34);
-      ctx.fillStyle = '#ffde59';
-      ctx.fillText(label, x + 14, y + 24);
-    });
-    const blob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', .85));
-    sheets.push({ name: `reel${v.n}_sheet${pad(s + 1)}.jpg`, blob, url: URL.createObjectURL(blob), from: group[0].t, to: group[group.length - 1].t });
-  }
-  return sheets;
-}
-
-function renderSheets(v) {
-  const box = v.el.querySelector('.sheets');
-  box.replaceChildren(...v.sheets.map(s => {
-    const a = Object.assign(document.createElement('a'), { href: s.url, target: '_blank', title: s.name });
-    a.append(Object.assign(document.createElement('img'), { src: s.url, alt: s.name }));
-    return a;
-  }));
-}
-
-async function decodeAudio(file) {
-  const buf = await file.arrayBuffer();
-  const ctx = new OfflineAudioContext(1, 1, 16000); // decodes and resamples to 16 kHz, which the speech model expects
-  const audio = await ctx.decodeAudioData(buf);
-  const out = new Float32Array(audio.length);
-  for (let c = 0; c < audio.numberOfChannels; c++) {
-    const ch = audio.getChannelData(c);
-    for (let i = 0; i < ch.length; i++) out[i] += ch[i] / audio.numberOfChannels;
-  }
-  return out;
-}
-
-// Finds sudden jumps in loudness (likely cuts, hits, whooshes or sound effects) and a coarse loudness timeline
-function analyzeSound(samples) {
-  const rate = 16000, hop = 320; // 20 ms windows
-  const n = Math.floor(samples.length / hop);
-  const rms = new Float32Array(n);
-  for (let i = 0; i < n; i++) {
-    let s = 0;
-    for (let j = i * hop; j < (i + 1) * hop; j++) s += samples[j] * samples[j];
-    rms[i] = Math.sqrt(s / hop);
-  }
-  const peak = Math.max(...rms, 1e-6);
-  const hits = [];
-  let last = -1;
-  for (let i = 15; i < n; i++) {
-    let avg = 0;
-    for (let j = i - 15; j < i; j++) avg += rms[j];
-    avg /= 15;
-    if (rms[i] > 0.04 * peak && rms[i] > avg * 2.5 + 0.01 * peak && (last < 0 || i - last > 12)) {
-      const ratio = rms[i] / peak;
-      hits.push({ t: r2(i * hop / rate), strength: ratio > .6 ? 'strong' : ratio > .3 ? 'medium' : 'soft' });
-      last = i;
-    }
-  }
-  const per = 25; // 0.5 s buckets
-  const loudness = [];
-  for (let i = 0; i < n; i += per) {
-    let m = 0;
-    for (let j = i; j < Math.min(n, i + per); j++) m = Math.max(m, rms[j]);
-    loudness.push(Math.min(9, Math.round(m / peak * 9)));
-  }
-  return { hits, loudness };
-}
-
-function buildTranscript(res) {
-  const chunks = res.chunks.filter(c => c.text && c.text.trim());
-  if (!res.words) {
-    return { words: null, segments: chunks.map(c => ({ start: r2(c.timestamp[0] ?? 0), end: r2(c.timestamp[1] ?? c.timestamp[0] ?? 0), text: c.text.trim() })) };
-  }
-  const words = chunks.map(c => ({ start: r2(c.timestamp[0] ?? 0), end: r2(c.timestamp[1] ?? c.timestamp[0] ?? 0), word: c.text.trim() }));
-  // Group words into caption-sized lines: break on sentence ends, pauses, or every 8 words
-  const segments = [];
-  let cur = null;
-  for (const w of words) {
-    if (!cur || w.start - cur.end > 0.6 || cur.count >= 8) {
-      cur = { start: w.start, end: w.end, text: w.word, count: 1 };
-      segments.push(cur);
-    } else {
-      cur.text += ` ${w.word}`;
-      cur.end = w.end;
-      cur.count++;
-    }
-    if (/[.!?]$/.test(w.word)) cur = null;
-  }
-  return { words, segments: segments.map(({ count, ...s }) => s) };
-}
-
-/* ---------- Output ---------- */
-function speakingAt(v, t) {
-  const tr = v.transcript;
-  if (!tr) return null;
-  const list = tr.words || tr.segments;
-  return list.some(x => t >= x.start - 0.05 && t <= x.end + 0.05);
-}
-
-function buildText() {
-  const ready = videos.filter(v => v.state.frames === 'done' || v.state.transcript === 'done');
-  const intro = [
-    `I'm sharing ${ready.length} short video${ready.length === 1 ? '' : 's'} so you can study how they were edited.`,
-    `For each video you get: the transcript with timestamps (seconds), sudden loud moments in the audio, a loudness timeline, and frame sheets.`,
-    `The frame sheets are images I'm attaching, named like reel1_sheet01.jpg. Every frame has its exact time printed in yellow in the corner, so you can line up what's on screen with what's being said and heard.`,
-    ``,
-    `Please work out the editor's thinking: when they cut, zoom, add text, captions, overlays, b-roll or sound effects; why they did it at that exact moment; and what they chose not to edit. Look at how text appears (style, position, animation) and how sound effects line up with visuals. Then give me a clear, reusable editing playbook.`
-  ].join('\n');
-
-  const parts = ready.map(v => {
-    const lines = [`=== REEL ${v.n}: ${v.name} ===`, `Length: ${fmt(v.duration || 0)} · ${v.width}×${v.height}`];
-    if (v.sheets.length) {
-      lines.push(`Frame sheets: ${v.sheets.map(s => s.name).join(', ')}`);
-      lines.push(`Frames sampled at ${v.fps} per second${v.deduped ? ', skipping frames where nothing changed' : ''}. Frames kept at (seconds): ${JSON.stringify(v.frames)}`);
-    }
-    lines.push('');
-    if (v.transcript) {
-      lines.push(`Transcript (JSON, times in seconds):`);
-      lines.push(JSON.stringify(v.transcript.words ? { segments: v.transcript.segments, words: v.transcript.words } : { segments: v.transcript.segments }));
-    } else {
-      lines.push(`Transcript: ${v.state.transcript === 'run' ? 'still processing when copied' : 'not available'}`);
-    }
-    if (v.hits) {
-      lines.push('', `Sudden loud moments (possible cuts, hits, whooshes or sound effects; "speaking" says whether someone was talking then):`);
-      lines.push(JSON.stringify(v.hits.map(h => ({ ...h, speaking: speakingAt(v, h.t) }))));
-      lines.push('', `Loudness every 0.5 s (0 = silent, 9 = loudest), starting at 0:00:`);
-      lines.push(v.loudness.join(' '));
-    }
-    return lines.join('\n');
-  });
-  return [intro, ...parts].join('\n\n');
-}
-
-async function writeClipboard(text) {
-  try { await navigator.clipboard.writeText(text); }
-  catch {
-    const ta = Object.assign(document.createElement('textarea'), { value: text });
-    ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0';
-    document.body.append(ta);
-    ta.select();
-    const ok = document.execCommand('copy');
-    ta.remove();
-    if (!ok) throw new Error('Copy failed');
-  }
-}
-
-/* Minimal ZIP writer (no compression; JPEGs are already compressed) */
-const CRC = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
-function crc32(buf) { let c = 0xFFFFFFFF; for (let i = 0; i < buf.length; i++) c = CRC[(c ^ buf[i]) & 255] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
-function makeZip(files) {
-  const enc = new TextEncoder();
-  const parts = [], central = [];
-  let offset = 0;
-  for (const f of files) {
-    const name = enc.encode(f.name), crc = crc32(f.data), size = f.data.length;
-    const loc = new DataView(new ArrayBuffer(30));
-    loc.setUint32(0, 0x04034b50, true); loc.setUint16(4, 20, true); loc.setUint16(12, 0x21, true);
-    loc.setUint32(14, crc, true); loc.setUint32(18, size, true); loc.setUint32(22, size, true); loc.setUint16(26, name.length, true);
-    parts.push(loc, name, f.data);
-    const cen = new DataView(new ArrayBuffer(46));
-    cen.setUint32(0, 0x02014b50, true); cen.setUint16(4, 20, true); cen.setUint16(6, 20, true); cen.setUint16(14, 0x21, true);
-    cen.setUint32(16, crc, true); cen.setUint32(20, size, true); cen.setUint32(24, size, true); cen.setUint16(28, name.length, true); cen.setUint32(42, offset, true);
-    central.push(cen, name);
-    offset += 30 + name.length + size;
-  }
-  const cenSize = central.reduce((s, p) => s + p.byteLength, 0);
-  const end = new DataView(new ArrayBuffer(22));
-  end.setUint32(0, 0x06054b50, true); end.setUint16(8, files.length, true); end.setUint16(10, files.length, true);
-  end.setUint32(12, cenSize, true); end.setUint32(16, offset, true);
-  return new Blob([...parts, ...central, end], { type: 'application/zip' });
-}
-
-/* ---------- Wire up ---------- */
-ui.file.addEventListener('change', () => { addFiles(ui.file.files); ui.file.value = ''; });
-ui.drop.addEventListener('dragover', e => { e.preventDefault(); ui.drop.classList.add('over'); });
-ui.drop.addEventListener('dragleave', () => ui.drop.classList.remove('over'));
-ui.drop.addEventListener('drop', e => { e.preventDefault(); ui.drop.classList.remove('over'); addFiles(e.dataTransfer.files); });
-
-ui.copyAll.addEventListener('click', async () => {
-  try {
-    await writeClipboard(buildText());
-    const still = videos.some(v => v.state.transcript === 'run');
-    toast(still ? 'Copied. Some transcripts are still processing' : 'Copied. Now paste into Claude and add the frame images');
-    ui.copyAll.classList.add('done');
-    ui.copyAll.textContent = 'Copied';
-    setTimeout(() => { ui.copyAll.classList.remove('done'); ui.copyAll.textContent = 'Copy all for Claude'; }, 1600);
-  } catch {
-    toast('Your browser blocked clipboard access');
-  }
-});
-
-ui.zip.addEventListener('click', async () => {
-  const files = [];
-  for (const v of videos) for (const s of v.sheets) files.push({ name: s.name, data: new Uint8Array(await s.blob.arrayBuffer()) });
-  files.push({ name: 'for-claude.txt', data: new TextEncoder().encode(buildText()) });
-  const url = URL.createObjectURL(makeZip(files));
-  const a = Object.assign(document.createElement('a'), { href: url, download: 'zephyr-reels.zip' });
-  document.body.append(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 10000);
-});
-</script>
+<script type="module" src="./app.js"></script>
 </body>
 </html>
