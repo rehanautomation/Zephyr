@@ -1,4 +1,4 @@
-// Video scanning: cuts, shots, faces and zooms, flashes, blur, on-screen text events and graphic-screen builds.
+// Video scanning: cuts, shots, faces and zooms, flashes, on-screen text events and graphic-screen builds.
 // Frames are analysed at 15 fps; none of those frames are exported.
 import { readText, loadOcr, resetTextCache } from './ocr.js';
 
@@ -412,26 +412,38 @@ export function buildEvents(scan) {
 
   /* Hard cuts (content change spikes, like PySceneDetect's adaptive detector) */
   let cutIdx = [];
+  const cutInfo = new Map(); // i -> { weak, gap }
   for (let i = 1; i < N; i++) {
     if (isNaN(cv[i])) continue;
     const nb = [i - 3, i - 2, i - 1, i + 1, i + 2, i + 3].filter(j => j >= 1 && j < N && !isNaN(cv[j])).map(j => cv[j]).slice(0, 4);
     const avg = mean(nb);
-    if ((cv[i] >= 18 && cv[i] >= 3 * (avg + 0.5)) || cv[i] >= 55) cutIdx.push(i);
+    if ((cv[i] >= 18 && cv[i] >= 3 * (avg + 0.5)) || cv[i] >= 55) {
+      let gap = 1;
+      while (i - gap >= 1 && isNaN(cv[i - gap])) gap++;
+      cutIdx.push(i);
+      cutInfo.set(i, { weak: cv[i] < 55 && (cv[i] < 25 || cv[i] < 4 * (avg + 0.5)), gap });
+    }
   }
   // A flash counts as one transition: drop cuts inside it, keep one at its end if the scene changed
-  const flashCuts = new Set();
+  const flashCuts = new Set(), flashUnsure = [];
   for (const f of flashes) {
     cutIdx = cutIdx.filter(i => i < f.a || i > f.b);
-    if (f.a > 0 && colDiff(f.a - 1, Math.min(N - 1, f.b)) > 22) { cutIdx.push(f.b); flashCuts.add(f.b); }
+    if (f.a <= 0) continue;
+    const change = colDiff(f.a - 1, Math.min(N - 1, f.b));
+    if (change > 22) { cutIdx.push(f.b); flashCuts.add(f.b); cutInfo.set(f.b, { weak: change < 30, gap: 1 }); }
+    else if (change > 15) flashUnsure.push(f);
   }
   cutIdx = [...new Set(cutIdx)].sort((a, b) => a - b).filter((i, k, arr) => k === 0 || i - arr[k - 1] >= 3);
   // The same face in the same place, at nearly the same size, on both sides is a zoom or movement, not a cut
+  const notCuts = [];
   cutIdx = cutIdx.filter(i => {
     if (flashCuts.has(i)) return true;
     const a = face[i - 1] || face[i - 2], b = face[i] || face[i + 1];
     if (!a || !b) return true;
     const r = b.h / a.h, dx = (b.x + b.w / 2) - (a.x + a.w / 2), dy = (b.y + b.h / 2) - (a.y + a.h / 2);
-    return !(r > 0.88 && r < 1.13 && Math.hypot(dx, dy) < 0.06);
+    const same = r > 0.88 && r < 1.13 && Math.hypot(dx, dy) < 0.06;
+    if (same && cv[i] >= 30) notCuts.push(T(i)); // big change but the same face: maybe a cut after all
+    return !same;
   });
 
   /* Shots and shot types */
@@ -447,7 +459,8 @@ export function buildEvents(scan) {
     for (let p = 0; p < mid.length; p += 3) { const key = (mid[p] >> 5) * 64 + (mid[p + 1] >> 5) * 8 + (mid[p + 2] >> 5); counts.set(key, (counts.get(key) || 0) + 1); }
     const top3 = [...counts.values()].sort((x, y) => y - x).slice(0, 3).reduce((x, y) => x + y, 0) / (mid.length / 3);
     const type = scan.faceOk && faceFrac >= 0.5 ? 'talking head' : top3 >= 0.45 ? 'graphic' : scan.faceOk ? 'b-roll' : 'footage';
-    shots.push({ n: shots.length, a, b, start: T(a), end: b >= N ? dur : T(b), type, faceFrac });
+    const unsure = type === 'graphic' && (top3 < 0.55 || (scan.faceOk && faceFrac >= 0.3));
+    shots.push({ n: shots.length, a, b, start: T(a), end: b >= N ? dur : T(b), type, faceFrac, unsure });
   }
   const shotAt = i => shots.find(s => i >= s.a && i < s.b) || shots[shots.length - 1];
 
@@ -470,7 +483,6 @@ export function buildEvents(scan) {
   for (const s of shots) {
     if (s.type !== 'talking head' || s.b - s.a < 4) continue;
     const used = new Uint8Array(s.b - s.a);
-    const shotSharp = median(Array.from(sharp.slice(s.a, s.b)));
     for (let pass = 0; pass < 4; pass++) {
       let best = null;
       for (let i = s.a; i < s.b - 3; i++) {
@@ -487,43 +499,51 @@ export function buildEvents(scan) {
       }
       if (!best) break;
       for (let q = best.i; q <= best.j; q++) used[q - s.a] = 1;
-      const blur = Math.min(...Array.from(sharp.slice(best.i, best.j + 1))) < 0.6 * shotSharp;
-      const dir = best.r > 1 ? 'in' : 'out';
-      zooms.push({
-        type: 'zoom', dir, start: T(best.i), end: T(best.j), a: best.i, b: best.j, blur,
-        from: dir === 'out' ? Math.round(100 / best.r) : 100, to: dir === 'out' ? 100 : Math.round(100 * best.r)
-      });
+      zooms.push(zoomOf(best.i, best.j, best.r));
     }
+    // A steady push over the shot, timed from where the face size really starts and stops changing
     const total = smoothH(s.b - 1) / smoothH(s.a);
     if (isFinite(total) && Math.abs(Math.log(total)) >= Math.log(1.1) && s.end - s.start > 1.2 && !zooms.some(z => z.a >= s.a && z.b <= s.b)) {
-      zooms.push({ type: 'zoom', dir: total > 1 ? 'in' : 'out', slow: true, start: s.start, end: s.end, a: s.a, b: s.b - 1, blur: false, from: total > 1 ? 100 : Math.round(100 / total), to: total > 1 ? Math.round(100 * total) : 100 });
+      const L = q => Math.abs(Math.log(smoothH(q) / smoothH(s.a))), tot = Math.abs(Math.log(total));
+      let i0 = s.a, i1 = s.b - 1;
+      while (i0 < i1 && L(i0) < 0.05 * tot) i0++;
+      while (i1 > i0 && L(i1) > 0.95 * tot) i1--;
+      i0 = Math.max(s.a, i0 - 1); i1 = Math.min(s.b - 1, i1 + 1);
+      zooms.push(zoomOf(i0, i1, smoothH(i1) / smoothH(i0)));
     }
   }
+  function zoomOf(i, j, r) {
+    let seen = 0;
+    for (let q = i; q <= j; q++) if (face[q]) seen++;
+    const dir = r > 1 ? 'in' : 'out';
+    return {
+      type: 'zoom', dir, start: T(i), end: T(j), a: i, b: j,
+      from: dir === 'out' ? Math.round(100 / r) : 100, to: dir === 'out' ? 100 : Math.round(100 * r),
+      unsure: Math.abs(Math.log(r)) < Math.log(1.12) || seen < 0.7 * (j - i + 1)
+    };
+  }
+  // Zooms of 3 seconds or more are left out
+  for (let k = zooms.length - 1; k >= 0; k--) if (zooms[k].end - zooms[k].start >= 3) zooms.splice(k, 1);
   zooms.sort((a, b) => a.start - b.start);
 
   /* Transitions at each cut */
   const transitions = [];
   for (let k = 1; k < shots.length; k++) {
     const prev = shots[k - 1], cur = shots[k], i = cur.a;
-    const kinds = [];
-    if (flashCuts.has(i)) { const f = flashes.find(f => f.b === i); kinds.push(f.dip ? 'dip to black' : `${f.color} flash`); }
-    const prevSharp = median(Array.from(sharp.slice(prev.a, prev.b))), curSharp = median(Array.from(sharp.slice(cur.a, cur.b)));
-    let blurry = false;
-    for (let f = Math.max(prev.a, i - 3); f < Math.min(cur.b, i + 4); f++) {
-      if (inFlash(f)) continue;
-      if (sharp[f] < 0.45 * (f < i ? prevSharp : curSharp)) blurry = true;
+    const flash = flashCuts.has(i) ? flashes.find(f => f.b === i) : null;
+    // Face or no face on each side: look at 3 frames just outside the cut (outside the flash if there is one)
+    const pre = flash ? flash.a : i;
+    const hasFace = (a, b) => { const fs = face.slice(Math.max(0, a), Math.min(N, b)); return fs.filter(Boolean).length * 2 > fs.length; };
+    const faceBefore = scan.faceOk ? hasFace(pre - 3, pre) : null, faceAfter = scan.faceOk ? hasFace(i, i + 3) : null;
+    let faceScale = null;
+    if (faceBefore && faceAfter) {
+      const before = median([fh[pre - 3], fh[pre - 2], fh[pre - 1]].filter(v => v !== undefined && !isNaN(v)));
+      const after = median([fh[i], fh[i + 1], fh[i + 2]].filter(v => v !== undefined && !isNaN(v)));
+      if (before && after) faceScale = after / before;
     }
-    if (blurry) kinds.push('blur');
-    let punch = null;
-    if (prev.type === 'talking head' && cur.type === 'talking head') {
-      const before = median([fh[i - 3], fh[i - 2], fh[i - 1]].filter(v => !isNaN(v)));
-      const after = median([fh[i], fh[i + 1], fh[i + 2]].filter(v => !isNaN(v)));
-      const r = after / before;
-      if (isFinite(r) && r >= 1.15) punch = `punch-in ${Math.round(r * 100)}%`;
-      else if (isFinite(r) && r <= 0.87) punch = `punch-out ${Math.round(r * 100)}%`;
-    }
-    if (punch) kinds.push(punch);
-    transitions.push({ type: 'cut', t: T(i), i, from: prev, to: cur, kinds });
+    const info = cutInfo.get(i) || { weak: false, gap: 1 };
+    const faceFlicker = scan.faceOk && (faceBefore !== hasFace(pre - 6, pre - 3) || faceAfter !== hasFace(i + 3, i + 6));
+    transitions.push({ type: 'cut', t: T(i), i, from: prev, to: cur, flash, faceBefore, faceAfter, faceScale, weak: info.weak, gap: info.gap, faceFlicker });
   }
   const flashOnly = flashes.filter(f => !flashCuts.has(f.b));
 
@@ -593,33 +613,18 @@ export function buildEvents(scan) {
     for (let f = refE; f <= limit; f++) dOut.push(dist(f, refE, maskE));
     const eMax = Math.max(...dOut);
     const pout = dOut.map(d => eMax < 8 ? 1 : 1 - d / eMax);
-    let endF = limit, gone = limit;
+    let endF = limit;
     for (let f = refE; f <= limit; f++) { if (pout[f - refE] < 0.88) { endF = f; break; } }
-    for (let f = endF; f <= limit; f++) { gone = f; if (pout[f - refE] < 0.15) break; }
-    if (ev.last + 1 >= samples.length) { endF = N; gone = N; }
-    const atCut = f => transitions.some(t => Math.abs(t.i - f) <= 1) || flashes.some(fl => f >= fl.a - 1 && f <= fl.b + 1);
+    if (ev.last + 1 >= samples.length) endF = N;
     const shot = shotAt(start);
-    const [lr, lg, lb] = rgbOf(ev.rep.primary.color);
-    const inMotion = describeEntrance(gray, aw, ah, R, Math.max(0, start - 1), start, settle, N, lr * .3 + lg * .59 + lb * .11);
-    const entrance = start === 0 && ev.first === 0 ? 'already on screen at the start'
-      : atCut(start) ? `appears with the cut${inMotion.label && !inMotion.instant ? ` (${inMotion.label})` : ''}`
-      : inMotion.label;
-    const exit = endF >= N ? 'stays until the end'
-      : atCut(endF) ? 'cut away with the shot'
-      : gone - endF <= 1 ? 'instant' : `${describeExit(gray, aw, ah, R, Math.max(0, endF - 1), gone)} over ${(T(gone) - T(endF)).toFixed(2)}s`;
     const rep = ev.rep, prim = rep.primary;
-    if (shot.type === 'graphic' && prim.boxColor) {
-      const c = col[Math.min(N - 1, settle)];
-      const counts = new Map();
-      for (let p = 0; p < c.length; p += 3) { const key = hex([c[p] & 0xF0, c[p + 1] & 0xF0, c[p + 2] & 0xF0]); counts.set(key, (counts.get(key) || 0) + 1); }
-      const bgc = [...counts.entries()].sort((x, y) => y[1] - x[1])[0][0];
-      if (colorDist(bgc, prim.boxColor) < 40) { prim.bg = prim.boxColor; prim.boxColor = null; prim.boxed = false; }
-    }
     textEvents.push({
       type: 'text', text: ev.text, start: T(start), settle: T(settle), end: endF >= N ? dur : T(endF), a: start, s: settle, e: Math.min(endF, N - 1),
-      box: ev.box, region: R, lines: rep.lines.length, caps: isCaps(ev.text), shot, entrance, entranceKind: inMotion.kind, exit,
-      color: prim.color, colors: [...new Set(rep.lines.map(l => l.color))], heightPct: prim.box.h, centerY: ev.box.y + ev.box.h / 2, centerX: ev.box.x + ev.box.w / 2,
-      boxed: !!prim.boxed, boxColor: prim.boxColor, bg: prim.bg,
+      box: ev.box, region: R, lines: rep.lines.length, caps: isCaps(ev.text), shot,
+      lineData: rep.lines.map(l => ({ text: l.text, pos: l.pos || [] })), conf: ev.conf, sightings: ev.seen.length,
+      timingUnsure: ev.first > 0 && dMax < 8,
+      color: prim.color, heightPct: prim.box.h, centerY: ev.box.y + ev.box.h / 2, centerX: ev.box.x + ev.box.w / 2,
+      boxed: !!prim.boxed, boxColor: prim.boxColor,
       changes: ev.changes.map(c => ({ t: samples[c.k].t, from: c.from, to: c.to }))
     });
   }
@@ -634,8 +639,8 @@ export function buildEvents(scan) {
     const steps = [];
     const initial = inside.filter(e => e.start - s.start < 0.35);
     steps.push({ t: s.start, i: s.a, settleI: Math.max(s.a, ...initial.map(e => e.s), s.a + 1), what: initial.length ? `appears with ${initial.map(e => `"${e.text}"`).join(', ')}` : 'appears' });
-    for (const e of inside) if (!initial.includes(e)) steps.push({ t: e.start, i: e.a, settleI: e.s, what: `+ "${e.text}"` });
-    for (const e of inside) for (const c of e.changes) steps.push({ t: c.t, i: Math.round(c.t * FPS), settleI: Math.round(c.t * FPS) + 1, what: `"${e.text}" turns ${colorName(c.from)} → ${colorName(c.to)}` });
+    for (const e of inside) if (!initial.includes(e)) steps.push({ t: e.start, i: e.a, settleI: e.s, what: `+ "${e.text}"`, text: e });
+    for (const e of inside) for (const c of e.changes) steps.push({ t: c.t, i: Math.round(c.t * FPS), settleI: Math.round(c.t * FPS) + 1, what: `"${e.text}" changes color (${colorName(c.from)} → ${colorName(c.to)})`, text: e });
     // Non-text visual changes that then hold still (icons, arrows, shapes)
     for (let f = s.a + 2; f < s.b - 2; f++) {
       if (inFlash(f) || inFlash(f + 1)) continue;
@@ -644,7 +649,7 @@ export function buildEvents(scan) {
       for (let p = 0; p < g1.length; p++) if (Math.abs(g1[p] - g0[p]) > 20) changed++;
       if (changed / g1.length < 0.01) continue;
       if (steps.some(st => Math.abs(st.i - f) <= 4)) { f += 2; continue; }
-      steps.push({ t: T(f), i: f, settleI: Math.min(s.b - 1, f + 3), what: 'visual change (shape or icon, no text)' });
+      steps.push({ t: T(f), i: f, settleI: Math.min(s.b - 1, f + 3), what: 'shape or icon change (no text)' });
       f += 4;
     }
     steps.sort((x, y) => x.t - y.t);
@@ -659,10 +664,10 @@ export function buildEvents(scan) {
       counts.set(key, e);
     }
     const palette = [...counts.values()].sort((x, y) => y.n - x.n).slice(0, 3).map(e => ({ hex: hex([e.r / e.n, e.g / e.n, e.b / e.n]), share: e.n / (c.length / 3) }));
-    screens.push({ shot: s, start: s.start, end: s.end, steps, heroI, palette, bg: palette[0].hex, texts: inside });
+    screens.push({ shot: s, start: s.start, end: s.end, steps, heroI, bg: palette[0].hex, texts: inside, unsure: s.unsure });
   }
 
-  return { shots, transitions, flashes: flashOnly, zooms, textEvents, screens };
+  return { shots, transitions, flashes: flashOnly, zooms, textEvents, screens, notCuts, flashUnsure };
 }
 
 // Thumbnail pixels that belong to the glyphs: inside each line's box and close to that line's text colour
@@ -678,146 +683,68 @@ function textMask(g, aw, ah, lines) {
   return mask;
 }
 
-// Describe how a piece of text enters, from the analysis frames around its first appearance
-function describeEntrance(gray, aw, ah, R, pre, from, fin, N, lum) {
-  if (fin - from <= 1) return { label: 'instant (pops on)', kind: 'instant', instant: true };
-  const x0 = clamp(Math.floor(R.x * aw), 0, aw - 1), x1 = clamp(Math.ceil((R.x + R.w) * aw), x0 + 1, aw);
-  const y0 = clamp(Math.floor(R.y * ah), 0, ah - 1), y1 = clamp(Math.ceil((R.y + R.h) * ah), y0 + 1, ah);
-  const P = gray[pre], F = gray[Math.min(fin, N - 1)];
-  const mask = [];
-  for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) { const p = y * aw + x; if (Math.abs(F[p] - P[p]) > 25) mask.push(p); }
-  if (mask.length < 6) return { label: `subtle change over ${((fin - from) / FPS).toFixed(2)}s`, kind: 'subtle' };
-  const extent = g => {
-    let mx0 = aw, mx1 = 0, my0 = ah, my1 = 0, sx = 0, sy = 0, c = 0;
-    for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) {
-      const p = y * aw + x;
-      if (Math.abs(g[p] - P[p]) > 25) { mx0 = Math.min(mx0, x); mx1 = Math.max(mx1, x); my0 = Math.min(my0, y); my1 = Math.max(my1, y); sx += x; sy += y; c++; }
-    }
-    return c ? { w: mx1 - mx0 + 1, h: my1 - my0 + 1, cx: sx / c, cy: sy / c, x0: mx0, c } : null;
-  };
-  const energy = g => { let s = 0; for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) { const p = y * aw + x; s += Math.abs(g[p] - P[p]); } return s; };
-  const variance = g => { let s = 0, s2 = 0, c = 0; for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) { const v = g[y * aw + x]; s += v; s2 += v * v; c++; } return s2 / c - (s / c) ** 2; };
-  const sharpNorm = g => lapVar(g, aw, x0, y0, x1, y1) / (variance(g) + 1);
-  const ef = extent(F);
-  const e0 = extent(gray[from]) || { w: 1, h: 1, cx: ef.cx, cy: ef.cy, x0: ef.x0 };
-  const sharpRatio = sharpNorm(gray[from]) / (sharpNorm(F) || 1);
-  const energyRatio = energy(gray[from]) / (energy(F) || 1);
-  let maxW = 0;
-  for (let f = from; f <= fin; f++) { const e = extent(gray[f]); if (e) maxW = Math.max(maxW, e.w / ef.w); }
-  const wR = e0.w / ef.w, hR = e0.h / ef.h;
-  const parts = [];
-  if (sharpRatio < 0.6) parts.push('blur→sharp');
-  if (energyRatio < 0.65 && wR > 0.8) parts.push('fade-in');
-  if (wR < 0.75 && hR < 0.75) parts.push(`scale-up from ~${Math.round(wR * 100)}%`);
-  else if (wR < 0.75 && Math.abs(e0.x0 - ef.x0) <= 2) parts.push('wipe / type-on left→right');
-  if (maxW > 1.08) parts.push('overshoot (pop)');
-  // Movement is measured on pixels that look like the text itself, and only if enough of it is visible at the start
-  const textPix = g => { let sx = 0, sy = 0, c = 0; for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) { const p = y * aw + x; if (Math.abs(g[p] - lum) < 28 && Math.abs(F[p] - lum) < 60) { sx += x; sy += y; c++; } } return c ? { cx: sx / c, cy: sy / c, c } : null; };
-  const t0 = lum === undefined ? null : textPix(gray[from]), t1 = lum === undefined ? null : textPix(F);
-  const usable = t0 && t1 && t0.c >= 0.3 * t1.c;
-  const mdx = usable ? (t0.cx - t1.cx) / aw : 0, mdy = usable ? (t0.cy - t1.cy) / ah : 0;
-  const moved = usable && (Math.abs(mdx) > 0.03 || Math.abs(mdy) > 0.03);
-  if (moved) parts.push(`slides in from ${Math.abs(mdy) >= Math.abs(mdx) ? (mdy > 0 ? 'below' : 'above') : (mdx > 0 ? 'the right' : 'the left')}`);
-  if (!parts.length) parts.push('quick build (see strip)');
-  const label = `${parts.join(' + ')}, ${((fin - from) / FPS).toFixed(2)}s${moved ? '' : ', no movement'}`;
-  return { label, kind: parts.map(p => p.split(' ')[0]).sort().join('+') };
-}
-
-function describeExit(gray, aw, ah, R, pre, fin) {
-  const x0 = clamp(Math.floor(R.x * aw), 0, aw - 1), x1 = clamp(Math.ceil((R.x + R.w) * aw), x0 + 1, aw);
-  const y0 = clamp(Math.floor(R.y * ah), 0, ah - 1), y1 = clamp(Math.ceil((R.y + R.h) * ah), y0 + 1, ah);
-  const mid = Math.round((pre + fin) / 2);
-  const s0 = lapVar(gray[pre], aw, x0, y0, x1, y1), s1 = lapVar(gray[mid], aw, x0, y0, x1, y1);
-  return s1 < 0.55 * s0 ? 'blur-out' : 'fade-out';
-}
-
 /* ---------- Which frames to export, and the sheets ---------- */
-export function planImages(reelNo, ev, styleUse, scan, seenKinds = new Set()) {
+const MAX_SHEETS = 5, MAX_SIDE = 1568, GAP = 8, HEAD = 44, ROWHEAD = 30, PER_ROW = 6;
+const cellSize = portrait => portrait ? [232, 412] : [240, 135];
+
+// Entrance strips for the first 2 text appearances after each cut, a build strip for each graphic screen.
+// Over budget, strips for looks already pictured earlier in the batch are dropped first.
+export function planImages(reelNo, ev, scan) {
   const portrait = scan.vh >= scan.vw;
   const T = i => i / FPS;
-  const heroes = [], strips = [], repeats = [], builds = [], pairs = [];
   const evenPick = (arr, k) => arr.length <= k ? arr : Array.from({ length: k }, (_, j) => arr[Math.round(j * (arr.length - 1) / (k - 1))]);
-  const burst = (e, max) => {
-    const from = Math.max(0, e.a - 2), to = Math.min(scan.N - 1, Math.max(e.s, e.a + 1) + 3, e.a + 10);
-    const idx = [];
-    for (let i = from; i <= to; i++) idx.push(i);
-    return evenPick(idx, max).map(i => T(i));
-  };
-  for (const st of styleUse) {
-    if (st.firstHere) {
-      const e = st.first;
-      const onGraphic = e.shot.type === 'graphic';
-      const animated = !['instant', 'subtle'].includes(e.entranceKind) && !/^appears with the cut$|^already on screen/.test(e.entrance);
-      if (onGraphic) {
-        if (animated) strips.push({ times: burst(e, 6), title: `Style ${st.id} entrance · ${e.entrance}`, key: `strip:${st.id}` });
-        continue;
-      }
-      heroes.push({ t: Math.max(e.start, Math.min(e.settle + 0.07, e.end - 0.04)), label: `Style ${st.id} · settled look`, key: `hero:${st.id}` });
-      if (!/^appears with the cut$|^already on screen/.test(e.entrance)) strips.push({ times: burst(e, 6), title: `Style ${st.id} entrance · ${e.entrance}`, key: `strip:${st.id}` });
-    }
-    for (const e of st.differentLater || []) repeats.push({ times: burst(e, 6), title: `Style ${st.id} at ${fmt(e.start)} · different entrance: ${e.entrance}`, key: `repeat:${e.start}` });
+  const strips = [];
+  for (const sh of ev.shots) {
+    if (sh.type === 'graphic') continue;
+    ev.textEvents.filter(e => !e.persistent && e.shot === sh).slice(0, 2).forEach((e, k) => {
+      const from = Math.max(0, e.a - 2), to = Math.min(scan.N - 1, Math.max(e.s, e.a + 1) + 2, e.a + 10);
+      const idx = [];
+      for (let i = from; i <= to; i++) idx.push(i);
+      const times = evenPick(idx, PER_ROW).map(T);
+      if (times.length < 2) return;
+      const fresh = !e.look || e.look.first === e;
+      strips.push({ t: e.start, times, title: `Text "${e.text}" appears · ${fmt(e.start)}`, key: `text:${e.start}`, rank: fresh ? 1 : k === 0 ? 3 : 4 });
+    });
   }
   for (const sc of ev.screens) {
-    if (!sc.firstHere) continue;
-    const pts = evenPick(sc.steps, 6).map(stp => ({ t: T(Math.min(stp.settleI, sc.shot.b - 1)), label: stp.what }));
-    pts.push({ t: T(sc.heroI), label: 'fully built (hero)' });
-    const uniq = pts.filter((p, k) => k === 0 || Math.abs(p.t - pts[k - 1].t) > 0.05).slice(-6);
-    builds.push({ times: uniq.map(p => p.t), labels: uniq.map(p => p.label), title: `Graphic ${sc.id} build-up (${fmt(sc.start)}–${fmt(sc.end)})`, key: `graphic:${sc.id}` });
-  }
-  for (const z of ev.zooms) {
-    const kind = `zoom-${z.dir}${z.blur ? '-blur' : ''}${z.slow ? '-slow' : ''}`;
-    if (seenKinds.has(kind)) continue; // one picture per kind of zoom across the batch
-    seenKinds.add(kind);
-    pairs.push({ times: [z.start, (z.start + z.end) / 2, z.end], labels: ['start', 'middle', 'end'], title: `ZOOM-${z.dir.toUpperCase()} ${z.from}%→${z.to}%${z.blur ? ' + blur' : ''} · ${fmt(z.start)}`, key: `zoom:${z.start}` });
-  }
-  for (const tr of ev.transitions) {
-    const kind = tr.kinds.length ? tr.kinds.map(k => k.split(' ')[0] === 'punch-in' || k.split(' ')[0] === 'punch-out' ? k.split(' ')[0] : k).join('+') : null;
-    if (!kind || seenKinds.has(kind)) continue;
-    seenKinds.add(kind);
-    pairs.push({ times: [Math.max(0, tr.t - 2 / FPS), tr.t, Math.min(scan.dur - 0.02, tr.t + 3 / FPS)], labels: ['before', 'during', 'after'], title: `CUT (${tr.kinds.join(', ')}) · ${fmt(tr.t)}`, key: `cut:${tr.t}` });
-  }
-  for (const f of ev.flashes) {
-    if (seenKinds.has('flash')) break;
-    seenKinds.add('flash');
-    pairs.push({ times: [Math.max(0, f.start - 2 / FPS), f.start, f.end], labels: ['before', 'during', 'after'], title: `${f.color.toUpperCase()} FLASH · ${fmt(f.start)}`, key: `flash:${f.start}` });
+    let pts = evenPick(sc.steps, PER_ROW - 1).map(stp => ({ t: T(Math.min(stp.settleI, sc.shot.b - 1)), label: stp.what }));
+    if (!pts.length || T(sc.heroI) > pts[pts.length - 1].t) pts.push({ t: T(sc.heroI), label: 'fully built' });
+    pts.sort((x, y) => x.t - y.t);
+    pts = pts.filter((p, k) => k === 0 || p.t - pts[k - 1].t > 0.05).slice(-PER_ROW);
+    if (pts.length < 2 && sc.shot.b - sc.shot.a > 2) {
+      const mid = T(Math.floor((sc.shot.a + sc.shot.b) / 2));
+      if (!pts.length || Math.abs(mid - pts[0].t) > 0.05) { pts.push({ t: mid, label: 'middle' }); pts.sort((x, y) => x.t - y.t); }
+    }
+    if (pts.length < 2) continue;
+    strips.push({ t: sc.start, times: pts.map(p => p.t), labels: pts.map(p => p.label), title: `Graphic screen ${fmt(sc.start)}–${fmt(sc.end)} · build`, key: `graphic:${sc.start}`, rank: sc.firstHere ? 0 : 2 });
   }
 
-  // Budget: aim for 3-4 sheets, never more than 6
-  const omitted = [];
-  const count = () => Math.ceil(heroes.length / 8) + Math.ceil((strips.length + repeats.length) / 3) + Math.ceil(builds.length / 3) + Math.ceil(pairs.length / 6);
-  if (count() > 6) { omitted.push(...repeats.map(r => r.title)); repeats.length = 0; }
-  if (count() > 6) for (const s of [...strips, ...builds]) { s.times = evenPick(s.times, 4); if (s.labels) s.labels = evenPick(s.labels, 4); }
-  const cap = (arr, n) => { while (arr.length > n) { const it = arr.pop(); omitted.push(it.title || it.label); } };
-  if (count() > 6) { cap(heroes, 16); cap(strips, 6); cap(builds, 3); cap(pairs, 6); }
-  while (count() > 6) { if (strips.length > 3) cap(strips, strips.length - 1); else if (heroes.length > 8) cap(heroes, 8); else if (pairs.length) cap(pairs, pairs.length - 1); else break; }
-
+  const SMALL = cellSize(portrait);
+  const perSheet = Math.max(1, Math.floor((MAX_SIDE - HEAD) / (ROWHEAD + SMALL[1] + GAP)));
+  const ranked = [...strips].sort((x, y) => x.rank - y.rank || x.t - y.t);
+  const kept = ranked.slice(0, MAX_SHEETS * perSheet).sort((x, y) => x.t - y.t);
+  const omitted = ranked.slice(MAX_SHEETS * perSheet).sort((x, y) => x.t - y.t).map(x => x.title);
+  // Spread the strips evenly over as few sheets as possible
+  const count = Math.ceil(kept.length / perSheet);
   const sheets = [];
-  const chunk = (arr, n) => Array.from({ length: Math.ceil(arr.length / n) }, (_, i) => arr.slice(i * n, i * n + n));
-  for (const c of chunk(heroes, 8)) sheets.push({ kind: 'styles', layout: 'grid', items: c });
-  for (const c of chunk([...strips, ...repeats], 3)) sheets.push({ kind: 'animations', layout: 'rows', items: c });
-  for (const c of chunk(builds, 3)) sheets.push({ kind: 'graphics', layout: 'rows', items: c });
-  for (const c of chunk(pairs, 6)) sheets.push({ kind: 'zooms', layout: 'pairs', items: c });
-  const titles = { styles: 'Style catalog (settled looks)', animations: 'Animation strips (entrances)', graphics: 'Graphic screen build-ups', zooms: 'Zooms and transitions' };
-  sheets.forEach((s, k) => {
-    s.no = k + 1;
-    s.name = `reel${String(reelNo).padStart(2, '0')}_s${k + 1}_${s.kind}.jpg`;
-    s.title = `Reel ${reelNo} · Sheet ${k + 1} of ${sheets.length} · ${titles[s.kind]}`;
+  for (let k = 0, at = 0; k < count; k++) { const n = Math.floor(kept.length / count) + (k < kept.length % count ? 1 : 0); sheets.push({ items: kept.slice(at, at + n) }); at += n; }
+  sheets.forEach((sh, k) => {
+    sh.name = `reel${String(reelNo).padStart(2, '0')}_s${k + 1}.jpg`;
+    sh.title = `Reel ${reelNo} · Sheet ${k + 1} of ${sheets.length}`;
   });
   return { sheets, omitted, portrait };
 }
 
 export async function renderSheets(video, plan) {
-  const portrait = plan.portrait;
-  const BIG = portrait ? [360, 640] : [640, 360], SMALL = portrait ? [232, 412] : [240, 135];
-  const GAP = 8, HEAD = 44, ROWHEAD = 30;
+  const SMALL = cellSize(plan.portrait);
   // Grab every needed frame once, in time order
   const times = new Set();
-  for (const s of plan.sheets) for (const it of s.items) (it.times || [it.t]).forEach(t => times.add(Math.round(t * 1000) / 1000));
+  for (const s of plan.sheets) for (const it of s.items) it.times.forEach(t => times.add(Math.round(t * 1000) / 1000));
   const frames = new Map();
-  const [fc, fx] = makeCanvas(BIG[0], BIG[1]);
+  const [fc, fx] = makeCanvas(SMALL[0] * 2, SMALL[1] * 2);
   for (const t of [...times].sort((a, b) => a - b)) {
-    await seek(video, Math.min(t, video.duration - 0.01));
-    fx.drawImage(video, 0, 0, BIG[0], BIG[1]);
+    await seek(video, Math.min(t + 0.02, video.duration - 0.01)); // just past the frame boundary, so the frame shown starts at t
+    fx.drawImage(video, 0, 0, fc.width, fc.height);
     frames.set(t, await createImageBitmap(fc));
   }
   const get = t => frames.get(Math.round(t * 1000) / 1000);
@@ -825,59 +752,39 @@ export async function renderSheets(video, plan) {
   const out = [];
   for (const s of plan.sheets) {
     const cells = [];
-    let W, H;
-    if (s.layout === 'grid') {
-      const cols = Math.min(portrait ? 4 : 2, s.items.length), rows = Math.ceil(s.items.length / cols);
-      W = cols * BIG[0] + (cols + 1) * GAP; H = HEAD + rows * BIG[1] + (rows + 1) * GAP - GAP;
-      s.items.forEach((it, k) => cells.push({ x: GAP + (k % cols) * (BIG[0] + GAP), y: HEAD + Math.floor(k / cols) * (BIG[1] + GAP), w: BIG[0], h: BIG[1], t: it.t, label: it.label, item: it }));
-    } else {
-      const per = 6;
-      const rows = s.layout === 'pairs' ? Math.ceil(s.items.length / 2) : s.items.length;
-      W = per * SMALL[0] + (per + 1) * GAP; H = HEAD + rows * (ROWHEAD + SMALL[1] + GAP);
-      s.rowTitles = [];
-      for (let r = 0; r < rows; r++) {
-        const group = s.layout === 'pairs' ? s.items.slice(r * 2, r * 2 + 2) : [s.items[r]];
-        const y = HEAD + r * (ROWHEAD + SMALL[1] + GAP);
-        let col = 0;
-        group.forEach((it, gi) => {
-          s.rowTitles.push({ x: GAP + col * (SMALL[0] + GAP), y, text: it.title, width: s.layout === 'pairs' ? 3 * SMALL[0] + 2 * GAP : W - 2 * GAP });
-          it.times.forEach((t, j) => cells.push({ x: GAP + (col + j) * (SMALL[0] + GAP), y: y + ROWHEAD, w: SMALL[0], h: SMALL[1], t, label: it.labels ? it.labels[j] : `${j + 1}/${it.times.length}`, item: it }));
-          col += s.layout === 'pairs' ? 3 : it.times.length;
-          if (s.layout === 'pairs' && gi === 0) col = 3;
-        });
-      }
-    }
+    const W = PER_ROW * SMALL[0] + (PER_ROW + 1) * GAP, H = HEAD + s.items.length * (ROWHEAD + SMALL[1] + GAP);
+    const rowTitles = [];
+    s.items.forEach((it, r) => {
+      const y = HEAD + r * (ROWHEAD + SMALL[1] + GAP);
+      rowTitles.push({ y, text: it.title });
+      it.times.forEach((t, j) => cells.push({ x: GAP + j * (SMALL[0] + GAP), y: y + ROWHEAD, w: SMALL[0], h: SMALL[1], t, label: it.labels ? it.labels[j] : `${j + 1}/${it.times.length}`, item: it }));
+    });
     const [c, x] = makeCanvas(W, H);
     x.fillStyle = '#111'; x.fillRect(0, 0, W, H);
     x.fillStyle = '#fff'; x.font = '600 22px system-ui, sans-serif'; x.textBaseline = 'middle';
     x.fillText(s.title, GAP + 4, HEAD / 2);
-    for (const rt of s.rowTitles || []) {
-      x.fillStyle = '#ddd'; x.font = '600 16px system-ui, sans-serif';
-      x.fillText(ellipsize(x, rt.text, rt.width), rt.x + 2, rt.y + ROWHEAD / 2);
-    }
+    x.fillStyle = '#ddd'; x.font = '600 16px system-ui, sans-serif';
+    for (const rt of rowTitles) x.fillText(ellipsize(x, rt.text, W - 2 * GAP), GAP + 2, rt.y + ROWHEAD / 2);
     cells.forEach((cell, k) => {
       cell.n = k + 1;
       const bmp = get(cell.t);
       if (bmp) x.drawImage(bmp, cell.x, cell.y, cell.w, cell.h);
-      const small = cell.w < 300;
-      const time = fmt(cell.t);
-      x.font = `700 ${small ? 15 : 22}px system-ui, sans-serif`;
-      const tw = x.measureText(`#${cell.n} ${time}`).width + 12;
-      x.fillStyle = 'rgba(0,0,0,.8)'; x.fillRect(cell.x + 4, cell.y + 4, tw, small ? 24 : 32);
-      x.fillStyle = '#ffde59'; x.fillText(`#${cell.n} ${time}`, cell.x + 10, cell.y + 4 + (small ? 12 : 16));
-      x.font = `600 ${small ? 13 : 17}px system-ui, sans-serif`;
-      const lbl = ellipsize(x, cell.label, cell.w - 16);
-      x.fillStyle = 'rgba(0,0,0,.75)'; x.fillRect(cell.x, cell.y + cell.h - (small ? 24 : 32), cell.w, small ? 24 : 32);
-      x.fillStyle = '#fff'; x.fillText(lbl, cell.x + 8, cell.y + cell.h - (small ? 12 : 16));
+      const time = `#${cell.n} ${fmt(cell.t)}`;
+      x.font = '700 15px system-ui, sans-serif';
+      x.fillStyle = 'rgba(0,0,0,.8)'; x.fillRect(cell.x + 4, cell.y + 4, x.measureText(time).width + 12, 24);
+      x.fillStyle = '#ffde59'; x.fillText(time, cell.x + 10, cell.y + 16);
+      x.font = '600 13px system-ui, sans-serif';
+      x.fillStyle = 'rgba(0,0,0,.75)'; x.fillRect(cell.x, cell.y + cell.h - 24, cell.w, 24);
+      x.fillStyle = '#fff'; x.fillText(ellipsize(x, cell.label, cell.w - 16), cell.x + 8, cell.y + cell.h - 12);
     });
     const blob = await new Promise(r => c.toBlob(r, 'image/jpeg', 0.86));
-    // Where each item landed: "reel01_s2_animations #1–6"
+    // Where each strip landed: "reel01_s2 #1–6"
     const refs = [];
     for (const it of s.items) {
       const ns = cells.filter(cl => cl.item === it).map(cl => cl.n);
-      if (ns.length) refs.push({ key: it.key, ref: `${s.name.replace(/\.jpg$/, '')} #${ns[0]}${ns.length > 1 ? `–${ns[ns.length - 1]}` : ''}` });
+      if (ns.length) refs.push({ key: it.key, ref: `${s.name.replace(/\.jpg$/, '')} #${ns[0]}–${ns[ns.length - 1]}` });
     }
-    out.push({ name: s.name, title: s.title, kind: s.kind, blob, url: URL.createObjectURL(blob), refs, cells: cells.map(cl => ({ n: cl.n, t: cl.t, label: cl.label, title: cl.item?.title })), width: W, height: H });
+    out.push({ name: s.name, title: s.title, blob, url: URL.createObjectURL(blob), refs, rows: s.items.map(it => ({ title: it.title, cells: cells.filter(cl => cl.item === it).map(cl => ({ n: cl.n, t: cl.t, label: cl.label })) })), width: W, height: H });
   }
   frames.forEach(b => b.close());
   return out;

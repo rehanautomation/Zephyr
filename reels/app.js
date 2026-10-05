@@ -1,7 +1,7 @@
 // Reels page: queue, progress, results and the two delivery buttons (Copy text / Get images)
 import { openVideo, scanVideo, buildEvents, planImages, renderSheets, fmt } from './vision.js';
-import { decodeAudio, analyzeSound, wavClip } from './audio.js';
-import { assignStyles, cleanTranscript, packageText } from './report.js';
+import { decodeAudio, findBumps, wavClip } from './audio.js';
+import { groupLooks, cleanTranscript, packageText, bumpList } from './report.js';
 
 const ICON = {
   check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>',
@@ -10,7 +10,7 @@ const ICON = {
   x: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>',
   copy: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2.5"/><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/></svg>'
 };
-const STEP_LABEL = { scan: 'Video scan', sound: 'Sound effects', transcript: 'Transcript', images: 'Images' };
+const STEP_LABEL = { scan: 'Video scan', sound: 'Sound bumps', transcript: 'Transcript', images: 'Images' };
 const IMAGE_LIMIT = 20;
 
 const $ = s => document.querySelector(s);
@@ -19,7 +19,7 @@ const ui = {
   copyText: $('#copyText'), getImages: $('#getImages'), zip: $('#zip'), clear: $('#clear'), list: $('#list'), toast: $('#toast')
 };
 
-const registry = { styles: [], screens: [], seenKinds: new Set() };
+const registry = { looks: [], screens: [] }; // similar-looking text and graphic screens across the batch
 const reels = [];
 let counter = 0;
 let queue = Promise.resolve();
@@ -179,7 +179,7 @@ function refresh() {
 function addFiles(files) {
   for (const file of files) {
     if (!file.type.startsWith('video/') && !/\.(mp4|mov|webm|m4v|mkv)$/i.test(file.name)) continue;
-    const r = { n: ++counter, file, name: file.name, state: {}, sheets: [], notes: [], omitted: [], sfxFiles: {}, sfxBlobs: [] };
+    const r = { n: ++counter, file, name: file.name, state: {}, sheets: [], omitted: [], bumpClips: new Map() };
     reels.push(r);
     addCard(r);
     queue = queue.then(() => processReel(r));
@@ -198,11 +198,11 @@ async function processReel(r) {
     r.el.querySelector('.poster').src = pc.toDataURL('image/jpeg', 0.7);
     const scan = await scanVideo(video, p => setStep(r, 'scan', 'run', `${Math.round(p * 100)}%`));
     if (r.removed) return;
-    if (scan.ocrError) r.notes.push(`on-screen text could not be read (${scan.ocrError})`);
-    if (!scan.faceOk) r.notes.push('face detector unavailable, so shot types and zooms are limited');
+    r.ocrError = scan.ocrError;
+    r.scanFaceOk = scan.faceOk;
     r.ev = buildEvents(scan);
     const texts = r.ev.textEvents.filter(e => !e.persistent).length;
-    setStep(r, 'scan', 'done', `${plural(r.ev.transitions.length, 'cut')} · ${plural(texts, 'text event')} · ${plural(r.ev.zooms.length, 'zoom')} · ${plural(r.ev.screens.length, 'graphic screen')}`);
+    setStep(r, 'scan', 'done', `${plural(r.ev.transitions.length, 'cut')} · ${plural(texts, 'text')} · ${plural(r.ev.zooms.length, 'zoom')} · ${plural(r.ev.screens.length, 'graphic screen')}`);
 
     step = 'sound';
     setStep(r, 'sound', 'run', 'listening');
@@ -210,20 +210,19 @@ async function processReel(r) {
     try { audio = await decodeAudio(r.file); } catch { audio = null; }
     if (audio) {
       try {
-        r.sound = await analyzeSound(audio.pcm16);
-        for (const h of r.sound.hits) {
-          const name = `reel${pad2(r.n)}_sfx_${h.t.toFixed(2)}_${h.label.replace(/[^a-z0-9]+/gi, '-').replace(/-+$/, '')}.wav`;
-          r.sfxFiles[h.t] = name;
-          r.sfxBlobs.push({ name, blob: wavClip(audio.mono, audio.sr, h.t) });
+        // Clips for the strongest candidates; the voice filter picks which ones are listed once speech is ready
+        r.bumps = findBumps(audio.pcm16);
+        for (const b of [...r.bumps].sort((x, y) => y.flux - x.flux).slice(0, 60)) {
+          r.bumpClips.set(b.t, { name: `reel${pad2(r.n)}_bump_${b.t.toFixed(2)}s.wav`, blob: wavClip(audio.mono, audio.sr, b.t) });
         }
-        setStep(r, 'sound', 'done', `${plural(r.sound.hits.length, 'sound effect')} · music ${r.sound.music.present ? 'yes' : 'no'}`);
+        setStep(r, 'sound', 'done', `${plural(r.bumps.length, 'bump')} found (voice filtered after the transcript)`);
       } catch (e) {
-        r.soundError = `Sound analysis failed (${e.message}).`;
-        setStep(r, 'sound', 'error', "couldn't load the sound model");
+        r.soundError = `sound check failed (${e.message})`;
+        setStep(r, 'sound', 'error', 'sound check failed');
       }
       startTranscript(r, audio.pcm16);
     } else {
-      r.soundError = 'No audio track in this video.';
+      r.soundError = 'no audio track in this video';
       r.transcriptError = 'no audio in this video';
       setStep(r, 'sound', 'error', 'no audio in this video');
       setStep(r, 'transcript', 'error', 'no audio to transcribe');
@@ -231,8 +230,8 @@ async function processReel(r) {
 
     step = 'images';
     setStep(r, 'images', 'run', 'picking frames');
-    assignStyles(r, registry);
-    const plan = planImages(r.n, r.ev, r.styleUse, scan, registry.seenKinds);
+    groupLooks(r, registry);
+    const plan = planImages(r.n, r.ev, scan);
     r.omitted = plan.omitted;
     scan.gray = scan.col = null; // free memory before the next reel
     r.sheets = await renderSheets(video, plan);
@@ -249,9 +248,13 @@ async function processReel(r) {
 function startTranscript(r, pcm16) {
   setStep(r, 'transcript', 'run', modelProgress !== null && modelProgress >= 100 ? 'waiting' : 'loading speech model (one-time download)');
   transcribe(r, pcm16.slice(), ui.quality.value).then(res => {
-    r.transcript = cleanTranscript(res, r.ev?.textEvents || []);
+    r.transcript = cleanTranscript(res);
     const n = r.transcript.words.length;
-    if (!r.removed) setStep(r, 'transcript', 'done', n ? `${plural(n, 'word')}${r.transcript.fixes ? ` · ${r.transcript.fixes} fixed from screen text` : ''}` : 'no speech detected');
+    if (!r.removed) {
+      setStep(r, 'transcript', 'done', n ? plural(n, 'word') : 'no speech detected');
+      const b = bumpList(r);
+      if (b && r.state.sound === 'done') setStep(r, 'sound', 'done', `${plural(b.list.length, 'bump')} off the voice`);
+    }
   }).catch(e => {
     r.transcriptError = /fetch|network|load/i.test(e.message) ? "couldn't download the speech model (check your internet)" : e.message;
     if (!r.removed) setStep(r, 'transcript', 'error', r.transcriptError);
@@ -265,7 +268,7 @@ async function copyText(list, btn) {
   const ready = list.filter(r => r.ev);
   if (!ready.length) return;
   try {
-    await writeClipboard(packageText(ready, registry, allRefs(ready)));
+    await writeClipboard(packageText(ready, allRefs(ready)));
     const pending = ready.some(r => r.state.transcript === 'run' || r.state.images === 'run');
     toast(pending ? 'Copied, but some reels are still working. Copy again when everything shows a check' : `Copied. Paste into Claude, then add the ${plural(ready.reduce((s, r) => s + r.sheets.length, 0), 'image')}`);
     if (btn) {
@@ -284,8 +287,8 @@ function batchFiles() {
   const files = [];
   for (const r of reels) for (const sh of r.sheets) files.push({ name: sh.name, blob: sh.blob });
   const ready = reels.filter(r => r.ev);
-  if (ready.length) files.push({ name: 'for-claude.txt', blob: new Blob([packageText(ready, registry, allRefs(ready))], { type: 'text/plain' }) });
-  for (const r of reels) for (const s of r.sfxBlobs) files.push({ dir: 'sound-effects', name: s.name, blob: s.blob });
+  if (ready.length) files.push({ name: 'for-claude.txt', blob: new Blob([packageText(ready, allRefs(ready))], { type: 'text/plain' }) });
+  for (const r of ready) for (const b of bumpList(r)?.list || []) { const clip = r.bumpClips.get(b.t); if (clip) files.push({ dir: 'sounds', name: clip.name, blob: clip.blob }); }
   return files;
 }
 
@@ -362,8 +365,7 @@ ui.getImages.addEventListener('click', saveToFolder);
 ui.zip.addEventListener('click', () => downloadZip());
 ui.clear.addEventListener('click', () => {
   for (const r of [...reels]) removeReel(r);
-  registry.styles.length = 0;
+  registry.looks.length = 0;
   registry.screens.length = 0;
-  registry.seenKinds.clear();
   counter = 0;
 });

@@ -83,9 +83,11 @@ export async function readText(canvas, { detLong = 512, minConf = 0.6 } = {}) {
     const res = hit ? hit.res : await recognize(rec, dict, canvas, bx, by, bw, bh);
     nextCache.push({ ...key, res });
     if (!res.text.trim() || res.conf < minConf) continue;
+    const lead = res.text.length - res.text.trimStart().length, text = res.text.trim();
     lines.push({
-      text: res.text.trim(),
+      text,
       conf: res.conf,
+      pos: res.pos.slice(lead, lead + text.length),
       box: { x: bx / W, y: by / H, w: bw / W, h: bh / H },
       core: { x: b.cx0 / dw, y: b.cy0 / dh, w: (b.cx1 - b.cx0) / dw, h: (b.cy1 - b.cy0) / dh }
     });
@@ -142,13 +144,19 @@ async function recognize(rec, dict, canvas, x, y, w, h) {
   const t = out[rec.outputNames[0]];
   const [, steps, classes] = t.dims;
   const data = t.data;
+  // pos = where each character sits along the line (in model steps), used later to find missing spaces
   let text = '', confSum = 0, chars = 0, prev = -1;
+  const pos = [];
   for (let s = 0; s < steps; s++) {
     let best = 0, bestP = -Infinity;
     const off = s * classes;
     for (let c = 0; c < classes; c++) if (data[off + c] > bestP) { bestP = data[off + c]; best = c; }
-    if (best !== 0 && best !== prev) { text += dict[best - 1] ?? ''; confSum += bestP; chars++; }
+    if (best !== 0 && best !== prev) {
+      const ch = dict[best - 1] ?? '';
+      text += ch; confSum += bestP; chars++;
+      for (let k = 0; k < ch.length; k++) pos.push([s, s]);
+    } else if (best !== 0 && pos.length) pos[pos.length - 1][1] = s;
     prev = best;
   }
-  return { text, conf: chars ? confSum / chars : 0 };
+  return { text, conf: chars ? confSum / chars : 0, pos: pos.map(([a, b]) => (a + b) / 2) };
 }
