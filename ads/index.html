@@ -1,0 +1,584 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Zephyr Ads</title>
+<meta name="description" content="See how your static image ads look in the Facebook and Instagram feed before they run.">
+<meta name="theme-color" content="#0b0a0f">
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400..800&family=Instrument+Serif:ital@1&display=swap">
+<style>
+  :root {
+    --bg: #0b0a0f;
+    --panel: #15131b;
+    --panel-2: #1c1924;
+    --text: #f4f2f7;
+    --muted: #a39fae;
+    --faint: #6f6a7a;
+    --line: rgba(255,255,255,.09);
+    --line-2: rgba(255,255,255,.16);
+    --red: #ff2e4d;
+    --ok: #3ee39a;
+    --warn: #ff6b7d;
+    --grad: linear-gradient(135deg, #ff2e4d, #ff8a3d);
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; color: var(--text);
+    background:
+      radial-gradient(900px 500px at 10% -10%, rgba(24,119,242,.20), transparent 60%),
+      radial-gradient(700px 500px at 100% 0%, rgba(214,47,208,.14), transparent 60%),
+      radial-gradient(800px 600px at 50% 110%, rgba(255,138,61,.08), transparent 60%),
+      var(--bg);
+    background-attachment: fixed;
+    font: 15px/1.5 Geist, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  button, select, input, textarea { font: inherit; color: inherit; }
+  [hidden] { display: none !important; }
+  .wrap { max-width: 1240px; margin: 0 auto; padding: 24px 16px 64px; }
+
+  header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 28px; flex-wrap: wrap; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 17px; color: var(--text); text-decoration: none; }
+  .brand svg { width: 30px; height: 30px; border-radius: 8px; }
+  .brand span { color: var(--muted); font-weight: 500; }
+  header nav { display: flex; gap: 16px; }
+  header nav a { color: var(--muted); font-size: 14px; text-decoration: none; }
+  header nav a:hover { color: var(--text); }
+
+  h1 { margin: 0 0 8px; font-size: clamp(32px, 5vw, 46px); line-height: 1.05; letter-spacing: -.035em; font-weight: 750; }
+  h1 em { font-family: "Instrument Serif", Georgia, serif; font-weight: 400; font-style: italic; letter-spacing: -.01em; background: linear-gradient(90deg, #1877f2, #8a5cff, #ff3d9a); -webkit-background-clip: text; background-clip: text; color: transparent; padding-right: .05em; }
+  .lead { margin: 0 0 22px; color: var(--muted); max-width: 680px; }
+
+  .panel { border: 1px solid var(--line); border-radius: 18px; background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02)); box-shadow: 0 24px 50px -30px rgba(0,0,0,.9); }
+  .brandbar { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 14px 18px; padding: 16px; margin-bottom: 14px; }
+  .logo-pick { position: relative; display: grid; justify-items: center; gap: 6px; cursor: pointer; color: var(--faint); font-size: 12px; }
+  .logo-pick .av { width: 56px; height: 56px; border-radius: 50%; overflow: hidden; border: 1px solid var(--line-2); background: var(--panel-2); display: grid; place-items: center; }
+  .logo-pick .av img { width: 100%; height: 100%; object-fit: cover; }
+  .logo-pick:hover .av { border-color: #8a9cff; }
+  .logo-pick input, .thumb input, .drop input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+  .logo-pick:focus-within .av, .thumb:focus-within img { outline: 2px solid #8a9cff; outline-offset: 2px; }
+  .field { display: grid; gap: 5px; min-width: 0; }
+  .field > span { display: flex; justify-content: space-between; gap: 8px; color: var(--muted); font-size: 13px; font-weight: 500; }
+  .field > span i { font-style: normal; color: var(--faint); font-weight: 400; }
+  .brandbar .field { flex: 1 1 220px; }
+  input[type=text], textarea, select {
+    width: 100%; padding: 9px 11px; border-radius: 10px; border: 1px solid var(--line-2); background: rgba(0,0,0,.25);
+    outline: none; transition: border-color .15s, box-shadow .15s;
+  }
+  textarea { resize: vertical; min-height: 104px; line-height: 1.45; }
+  input[type=text]:focus, textarea:focus, select:focus { border-color: #8a9cff; box-shadow: 0 0 0 3px rgba(138,156,255,.18); }
+  select { appearance: none; background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%); background-position: calc(100% - 16px) 55%, calc(100% - 11px) 55%; background-size: 5px 5px; background-repeat: no-repeat; padding-right: 30px; }
+  select option { background: var(--panel-2); }
+
+  .drop {
+    position: relative; display: grid; place-items: center; gap: 6px; padding: 30px 16px; text-align: center;
+    border: 1.5px dashed var(--line-2); border-radius: 20px;
+    background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.015));
+    cursor: pointer; transition: border-color .2s, background .2s, box-shadow .2s;
+  }
+  .drop:hover, .drop.over { border-color: #6f8cff; background: linear-gradient(180deg, rgba(24,119,242,.12), rgba(24,119,242,.03)); box-shadow: 0 0 0 4px rgba(24,119,242,.12); }
+  .drop:focus-within { outline: 2px solid #8a9cff; outline-offset: 2px; }
+  .drop-icon { display: grid; place-items: center; width: 52px; height: 52px; margin-bottom: 4px; border-radius: 15px; background: linear-gradient(135deg, #1877f2, #8a5cff 55%, #ff3d9a); box-shadow: 0 12px 30px -8px rgba(24,119,242,.7); transition: transform .25s; }
+  .drop:hover .drop-icon { transform: translateY(-3px) scale(1.04); }
+  .drop-icon svg { width: 24px; height: 24px; color: #fff; }
+  .drop strong { font-size: 16px; }
+  .drop small { color: var(--faint); }
+
+  .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin: 22px 0 14px; }
+  .seg { display: inline-flex; padding: 3px; border-radius: 11px; background: var(--panel-2); border: 1px solid var(--line); }
+  .seg button { height: 32px; padding: 0 13px; border: 0; border-radius: 8px; background: transparent; color: var(--muted); font-size: 13px; font-weight: 600; cursor: pointer; }
+  .seg button[aria-pressed=true] { background: #fff; color: #111; }
+  .seg button:focus-visible, .btn:focus-visible { outline: 2px solid #8a9cff; outline-offset: 2px; }
+  .check { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: 14px; cursor: pointer; }
+  .check input { accent-color: #6f8cff; width: 16px; height: 16px; }
+  .toolbar .count { color: var(--faint); font-size: 13px; margin-left: auto; }
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 34px; padding: 0 12px; border-radius: 9px; border: 1px solid var(--line-2); background: var(--panel-2); font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+  .btn:hover { border-color: rgba(255,255,255,.28); }
+  .btn.ghost { background: transparent; border-color: transparent; color: var(--muted); }
+  .btn.ghost:hover { color: var(--text); border-color: var(--line-2); }
+  .btn svg { width: 15px; height: 15px; }
+  .save-warn { margin: 0 0 14px; padding: 10px 14px; border-radius: 12px; border: 1px solid rgba(255,107,125,.4); background: rgba(255,107,125,.08); color: #ffc2ca; font-size: 14px; }
+
+  /* ---------- Ads ---------- */
+  .ads { display: grid; gap: 16px; }
+  .ad { display: grid; grid-template-columns: 330px minmax(0, 1fr); overflow: hidden; animation: rise .35s ease-out both; }
+  @keyframes rise { from { opacity: 0; translate: 0 10px; } }
+  .editor { display: grid; align-content: start; gap: 12px; padding: 16px; border-right: 1px solid var(--line); }
+  .ed-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .ed-head b { font-size: 15px; }
+  .ed-head div { display: flex; gap: 2px; }
+  .thumb { position: relative; display: flex; align-items: center; gap: 12px; cursor: pointer; }
+  .thumb img { width: 64px; height: 64px; border-radius: 10px; object-fit: cover; border: 1px solid var(--line-2); background: var(--panel-2); flex: none; }
+  .thumb span { display: grid; font-size: 13px; color: var(--muted); line-height: 1.35; }
+  .thumb em { font-style: normal; }
+  .thumb span b { color: var(--text); font-weight: 600; }
+  .thumb:hover b { color: #9fb0ff; }
+  .thumb .crop-note { color: #ffcf7a; }
+  .fit { font-size: 12px; color: var(--faint); margin-top: -6px; }
+  .fit.cut { color: #ffcf7a; }
+
+  .stage { display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-start; justify-content: center; padding: 22px 16px 26px; background: #f0f2f5; overflow-x: auto; }
+  .pv { display: grid; gap: 8px; }
+  .pv-label { color: #65676b; font: 600 12px/1 system-ui, -apple-system, "Segoe UI", sans-serif; letter-spacing: .04em; text-transform: uppercase; }
+  .ads[data-show=fb] .pv.ig-pv, .ads[data-show=ig] .pv.fb-pv { display: none; }
+
+  /* Previews only: every ad side by side, editors hidden */
+  .ads.only { display: flex; flex-wrap: wrap; justify-content: center; gap: 22px; padding: 22px 12px; border-radius: 18px; background: #f0f2f5; }
+  .ads.only .ad { display: block; overflow: visible; border: 0; background: none; box-shadow: none; animation: none; }
+  .ads.only .editor { display: none; }
+  .ads.only .stage { padding: 0; background: none; gap: 22px; }
+  .ads.only .pv-label::after { content: " · " attr(data-ad); }
+
+  @media (max-width: 860px) {
+    .ad { grid-template-columns: 1fr; }
+    .editor { border-right: 0; border-bottom: 1px solid var(--line); }
+  }
+  @media (max-width: 560px) {
+    .toolbar .count { margin-left: 0; width: 100%; order: 5; }
+    .stage { justify-content: flex-start; }
+  }
+
+  /* ---------- Facebook feed (sizes measured from the Ads Manager preview) ---------- */
+  .fb {
+    width: 378px; flex: none; background: #fff; border-radius: 8px; box-shadow: 0 1px 2px rgba(0,0,0,.2);
+    font-family: "Segoe UI Historic", "Segoe UI", Helvetica, Arial, sans-serif; color: #1c1e21; overflow: hidden;
+    -webkit-font-smoothing: auto; text-align: left;
+  }
+  .fb-head { display: flex; align-items: center; gap: 13px; padding: 11px 12px 0; }
+  .fb-av { width: 44px; height: 44px; border-radius: 50%; flex: none; overflow: hidden; display: grid; place-items: center; background: #e4e6eb; color: #fff; font-size: 18px; font-weight: 600; }
+  .fb-av img { width: 100%; height: 100%; object-fit: cover; }
+  .fb-who { min-width: 0; flex: 1; }
+  .fb-name { font-size: 15px; line-height: 20px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .fb-meta { display: flex; align-items: center; gap: 3px; font-size: 13px; line-height: 16px; color: #65676b; }
+  .fb-meta svg { width: 12px; height: 12px; }
+  .fb-icons { display: flex; align-items: center; gap: 22px; align-self: flex-start; padding-top: 6px; color: #1c1e21; }
+  .fb-icons svg { width: 22px; height: 22px; display: block; }
+  .fb-text { display: flow-root; padding: 14px 12px 14px; font-size: 15px; line-height: 21px; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .fb-more { float: right; color: #65676b; cursor: pointer; padding-left: 4px; }
+  .fb-more:hover { text-decoration: underline; }
+  .fb-media, .ig-media { position: relative; background: #e4e6eb; overflow: hidden; }
+  .fb-media img, .ig-media img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+  .fb-cta { display: flex; align-items: center; gap: 16px; min-height: 52px; padding: 8px 14px 7px; background: #f7f8fa; border-bottom: 1px solid #e4e6eb; }
+  .fb-copy { flex: 1; min-width: 0; }
+  .fb-hl { display: flow-root; font-size: 16px; line-height: 24px; font-weight: 500; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .fb-dots { float: right; color: #1c1e21; padding-left: 6px; }
+  .fb-desc { font-size: 14px; line-height: 18px; color: #65676b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .fb-btn { flex: none; height: 32px; padding: 0 11px; border-radius: 6px; background: #e4e6eb; display: grid; place-items: center; font-size: 15px; font-weight: 600; white-space: nowrap; }
+  .fb-react { height: 21px; }
+  .fb-actions { display: flex; height: 39px; margin: 0 12px; border-top: 1px solid #ced0d4; }
+  .fb-actions span { flex: 1; display: flex; align-items: center; justify-content: center; gap: 9px; color: #65676b; font-size: 14px; font-weight: 600; }
+  .fb-actions svg { width: 21px; height: 21px; }
+
+  /* ---------- Instagram feed ---------- */
+  .ig {
+    width: 378px; flex: none; background: #fff; border: 1px solid #dbdbdb; border-radius: 12px; overflow: hidden; color: #000;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; text-align: left;
+  }
+  .ig-head { display: flex; align-items: center; gap: 10px; height: 66px; padding: 0 14px 0 12px; }
+  .ig-av { width: 38px; height: 38px; border-radius: 50%; border: 1px solid #dbdbdb; overflow: hidden; flex: none; display: grid; place-items: center; background: #efefef; color: #737373; font-size: 15px; font-weight: 600; }
+  .ig-av img { width: 100%; height: 100%; object-fit: cover; }
+  .ig-who { flex: 1; min-width: 0; }
+  .ig-name { font-size: 14.5px; line-height: 18px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ig-meta { font-size: 12.5px; line-height: 16px; color: #262626; }
+  .ig-head > svg { width: 22px; height: 22px; flex: none; }
+  .ig-cta { display: flex; align-items: center; justify-content: space-between; height: 50px; padding: 0 15px 0 14px; border-bottom: 1px solid #ebebeb; font-size: 14.5px; font-weight: 600; }
+  .ig-cta svg { width: 18px; height: 18px; }
+  .ig-icons { display: flex; align-items: center; gap: 17px; padding: 31px 14px 16px; }
+  .ig-icons svg { width: 26px; height: 26px; display: block; }
+  .ig-icons svg:last-child { margin-left: auto; }
+  .ig-cap { padding: 0 14px 20px; font-size: 14.5px; line-height: 23px; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .ig-cap b { font-weight: 600; }
+  .ig-more { color: #737373; cursor: pointer; }
+  .ig-icons + .ig-cap:empty { display: none; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <a class="brand" href="/">
+      <svg viewBox="0 0 32 32" aria-hidden="true">
+        <defs><linearGradient id="bg1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff4d4d"/><stop offset="1" stop-color="#c8102e"/></linearGradient></defs>
+        <rect width="32" height="32" rx="7" fill="url(#bg1)"/>
+        <path fill="#fff" d="M4,6H8.3L10,10.25L11.7,6H16L12,16V26H8V16ZM16,6H28V10H24V26H20V10H16Z"/>
+      </svg>
+      Zephyr <span>Ads</span>
+    </a>
+    <nav><a href="/">YouTube transcripts</a><a href="/reels/">Reel breakdown</a></nav>
+  </header>
+
+  <h1>See your <em>ads</em> before they run</h1>
+  <p class="lead">Drop in your static ad images and add the text. You'll see each ad exactly as it shows in the Facebook and Instagram feed, including where the text gets cut off. Nothing is uploaded; it all stays on your computer.</p>
+
+  <section class="panel brandbar" aria-label="Page details">
+    <label class="logo-pick" title="Profile picture">
+      <span class="av" id="logoBox"></span>
+      Logo
+      <input type="file" id="logoFile" accept="image/*">
+    </label>
+    <label class="field"><span>Facebook Page name</span><input type="text" id="pageName" autocomplete="off"></label>
+    <label class="field"><span>Instagram username</span><input type="text" id="igName" autocomplete="off" spellcheck="false"></label>
+  </section>
+
+  <label class="drop" id="drop">
+    <span class="drop-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/></svg></span>
+    <strong>Drop ad images here, or click to choose</strong>
+    <small>JPG or PNG · 1:1 or 4:5 · one ad per image · you can also paste an image</small>
+    <input type="file" id="files" accept="image/*" multiple>
+  </label>
+
+  <div class="toolbar" id="toolbar" hidden>
+    <div class="seg" id="show" role="group" aria-label="Placement">
+      <button type="button" data-show="both">Both</button>
+      <button type="button" data-show="fb">Facebook</button>
+      <button type="button" data-show="ig">Instagram</button>
+    </div>
+    <label class="check"><input type="checkbox" id="only"> Previews only</label>
+    <span class="count" id="count"></span>
+    <button class="btn ghost" type="button" id="clear">Clear all</button>
+  </div>
+  <p class="save-warn" id="saveWarn" hidden>Too many big images to remember after you close the page. The previews still work; just don't refresh.</p>
+
+  <div class="ads" id="ads"></div>
+</div>
+
+<template id="adTpl">
+  <article class="ad panel">
+    <div class="editor">
+      <div class="ed-head">
+        <b class="ad-no"></b>
+        <div>
+          <button class="btn ghost dup" type="button" title="Duplicate this ad"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2.5"/><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/></svg>Duplicate</button>
+          <button class="btn ghost del" type="button" title="Remove this ad" aria-label="Remove this ad"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+        </div>
+      </div>
+      <label class="thumb"><img alt=""><span><b>Replace image</b><em class="dims"></em></span><input type="file" accept="image/*"></label>
+      <label class="field"><span>Primary text <i class="n-primary"></i></span><textarea data-k="primary" placeholder="The text above the image"></textarea></label>
+      <div class="fit fit-primary"></div>
+      <label class="field"><span>Headline <i class="n-headline"></i></span><input type="text" data-k="headline" placeholder="Bold text under the image"></label>
+      <label class="field"><span>Description <i class="n-desc"></i></span><input type="text" data-k="desc" placeholder="Small grey text under the headline"></label>
+      <div class="fit fit-hl"></div>
+      <label class="field"><span>Button</span><select data-k="cta"></select></label>
+    </div>
+    <div class="stage">
+      <div class="pv fb-pv">
+        <div class="pv-label">Facebook feed</div>
+        <div class="fb">
+          <div class="fb-head">
+            <div class="fb-av"></div>
+            <div class="fb-who"><div class="fb-name"></div><div class="fb-meta">Ad · <svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1Zm4.9 6.2h-2.1a10.6 10.6 0 0 0-.9-3.9 5.5 5.5 0 0 1 3 3.9ZM8 2.6c.6.8 1.2 2.3 1.3 4.6H6.7C6.8 4.9 7.4 3.4 8 2.6Zm-1.9.7a10.6 10.6 0 0 0-.9 3.9H3.1a5.5 5.5 0 0 1 3-3.9ZM3.1 8.8h2.1c.1 1.5.4 2.8.9 3.9a5.5 5.5 0 0 1-3-3.9ZM8 13.4c-.6-.8-1.2-2.3-1.3-4.6h2.6c-.1 2.3-.7 3.8-1.3 4.6Zm1.9-.7c.5-1.1.8-2.4.9-3.9h2.1a5.5 5.5 0 0 1-3 3.9Z"/></svg></div></div>
+            <div class="fb-icons">
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="4" cy="12" r="2.2"/><circle cx="12" cy="12" r="2.2"/><circle cx="20" cy="12" r="2.2"/></svg>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M5 5l14 14M19 5 5 19"/></svg>
+            </div>
+          </div>
+          <div class="fb-text"></div>
+          <div class="fb-media"><img alt=""></div>
+          <div class="fb-cta">
+            <div class="fb-copy"><div class="fb-hl"></div><div class="fb-desc"></div></div>
+            <span class="fb-btn"></span>
+          </div>
+          <div class="fb-react"></div>
+          <div class="fb-actions">
+            <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M7.5 10.5v10H3.8a.8.8 0 0 1-.8-.8v-8.4a.8.8 0 0 1 .8-.8h3.7Zm0 0 3.9-7.6c1.6 0 2.8 1.3 2.6 2.9l-.4 3.2h5.2c1.4 0 2.4 1.3 2.1 2.6l-1.6 7.3a2.6 2.6 0 0 1-2.5 2.1H7.5"/></svg>Like</span>
+            <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 4h15A1.5 1.5 0 0 1 21 5.5v10a1.5 1.5 0 0 1-1.5 1.5H11l-5 4v-4H4.5A1.5 1.5 0 0 1 3 15.5v-10A1.5 1.5 0 0 1 4.5 4Z"/></svg>Comment</span>
+            <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 4.5 21 11.3l-7.5 6.8v-3.9c-5 0-8.1 1.4-10.5 5 .6-5.6 3.6-10 10.5-10.8V4.5Z"/></svg>Share</span>
+          </div>
+        </div>
+      </div>
+      <div class="pv ig-pv">
+        <div class="pv-label">Instagram feed</div>
+        <div class="ig">
+          <div class="ig-head">
+            <span class="ig-av"></span>
+            <div class="ig-who"><div class="ig-name"></div><div class="ig-meta">Ad</div></div>
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>
+          </div>
+          <div class="ig-media"><img alt=""></div>
+          <div class="ig-cta"><span></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></div>
+          <div class="ig-icons">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M16.8 3.5c-2 0-3.6 1-4.8 2.8C10.8 4.5 9.2 3.5 7.2 3.5 4.1 3.5 2 6 2 9.1c0 5.6 7.3 10.3 10 11.6 2.7-1.3 10-6 10-11.6 0-3.1-2.1-5.6-5.2-5.6Z"/></svg>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M20.66 17A10 10 0 1 0 17.07 20.62L22 22Z"/></svg>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m16.5 2.5 3 3-3 3M4.5 11V9a3.5 3.5 0 0 1 3.5-3.5h11.5M7.5 21.5l-3-3 3-3M19.5 13v2a3.5 3.5 0 0 1-3.5 3.5H4.5"/></svg>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M22 3 9.2 10.1M11.7 20.3 22 3H2l7.2 7.1 2.5 10.2Z"/></svg>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M20 21 12 13.4 4 21V3h16Z"/></svg>
+          </div>
+          <div class="ig-cap"></div>
+        </div>
+      </div>
+    </div>
+  </article>
+</template>
+
+<script>
+(() => {
+  const CTAS = ['Learn more', 'Shop now', 'Sign up', 'Book now', 'Get quote', 'Apply now', 'Contact us', 'Download', 'Get offer', 'Order now', 'Subscribe', 'Send message', 'Call now', 'Watch more', 'See menu', 'Get started', 'No button'];
+  const KEY = 'zephyr-ads';
+  const $ = s => document.querySelector(s);
+  const ui = {
+    logoBox: $('#logoBox'), logoFile: $('#logoFile'), pageName: $('#pageName'), igName: $('#igName'),
+    drop: $('#drop'), files: $('#files'), toolbar: $('#toolbar'), show: $('#show'), only: $('#only'),
+    count: $('#count'), clear: $('#clear'), saveWarn: $('#saveWarn'), ads: $('#ads'), tpl: $('#adTpl')
+  };
+
+  /* ---------- State, saved in this browser ---------- */
+  let state = { brand: { name: 'Your Page', ig: 'yourpage', logo: null }, ads: [], show: 'both', only: false };
+  try { const saved = JSON.parse(localStorage.getItem(KEY)); if (saved && Array.isArray(saved.ads)) state = { ...state, ...saved, brand: { ...state.brand, ...saved.brand } }; } catch { /* start fresh */ }
+  let saveTimer;
+  function save() {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => {
+      try { localStorage.setItem(KEY, JSON.stringify(state)); ui.saveWarn.hidden = true; }
+      catch { ui.saveWarn.hidden = false; }
+    }, 300);
+  }
+  const uid = () => Math.random().toString(36).slice(2, 10);
+
+  /* ---------- Images: shrink to feed size so they load fast and fit in storage ---------- */
+  function readImage(file, max) {
+    return new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => {
+        const w = img.naturalWidth, h = img.naturalHeight, k = Math.min(1, max / Math.max(w, h));
+        const c = Object.assign(document.createElement('canvas'), { width: Math.round(w * k), height: Math.round(h * k) });
+        const x = c.getContext('2d');
+        x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height);
+        x.drawImage(img, 0, 0, c.width, c.height);
+        URL.revokeObjectURL(url);
+        resolve({ src: c.toDataURL('image/jpeg', 0.9), w, h });
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Could not read that image')); };
+      img.src = url;
+    });
+  }
+
+  // The feed shows images between 1.91:1 (wide) and 4:5 (tall); anything outside gets cropped to the nearest
+  const shownRatio = (w, h) => Math.min(1.91, Math.max(0.8, w / h));
+  function ratioName(w, h) {
+    const r = w / h, known = [['1:1', 1], ['4:5', 0.8], ['9:16', 0.5625], ['16:9', 1.778], ['1.91:1', 1.91], ['2:3', 0.667], ['3:4', 0.75]];
+    const best = known.reduce((a, b) => Math.abs(Math.log(b[1] / r)) < Math.abs(Math.log(a[1] / r)) ? b : a);
+    return Math.abs(Math.log(best[1] / r)) < 0.02 ? best[0] : `${r.toFixed(2)}:1`;
+  }
+
+  /* ---------- Text cut-off, the way the feed does it ----------
+     Fill the box with the full text; if it is taller than the allowed lines, find the longest
+     start of the text that fits together with the "See more" / "..." marker. */
+  function clampLines(el, full, lines, lineHeight, fill) {
+    const cs = getComputedStyle(el);
+    const max = lines * lineHeight + parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom) + 1;
+    fill(full, false);
+    if (el.scrollHeight <= max) return full.length;
+    let lo = 0, hi = full.length;
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >> 1;
+      fill(full.slice(0, mid).replace(/\s+$/, ''), true);
+      if (el.scrollHeight <= max) lo = mid; else hi = mid - 1;
+    }
+    fill(full.slice(0, lo).replace(/\s+$/, ''), true);
+    return lo;
+  }
+
+  const initial = name => (name.trim()[0] || '?').toUpperCase();
+  function avatar(box) {
+    box.replaceChildren();
+    if (state.brand.logo) box.append(Object.assign(new Image(), { src: state.brand.logo, alt: '' }));
+    else box.textContent = initial(state.brand.name);
+  }
+
+  /* ---------- One ad card ---------- */
+  const cards = new Map(); // id -> { el, open: { fb, ig } }
+
+  function buildCard(ad) {
+    const el = ui.tpl.content.firstElementChild.cloneNode(true);
+    const card = { el, open: { fb: false, ig: false } };
+    cards.set(ad.id, card);
+    const sel = el.querySelector('select');
+    for (const c of CTAS) sel.append(new Option(c, c));
+    for (const f of el.querySelectorAll('[data-k]')) {
+      f.value = ad[f.dataset.k] ?? '';
+      f.addEventListener('input', () => {
+        ad[f.dataset.k] = f.value;
+        if (f.dataset.k === 'primary') card.open.fb = card.open.ig = false;
+        paint(ad);
+        save();
+      });
+    }
+    el.querySelector('.thumb input').addEventListener('change', async e => {
+      const file = e.target.files[0];
+      e.target.value = '';
+      if (!file) return;
+      try { Object.assign(ad, await readImage(file, 1080)); paint(ad); save(); } catch (err) { alert(err.message); }
+    });
+    el.querySelector('.dup').addEventListener('click', () => {
+      const copy = { ...ad, id: uid() };
+      state.ads.splice(state.ads.indexOf(ad) + 1, 0, copy);
+      renderList();
+      save();
+    });
+    el.querySelector('.del').addEventListener('click', () => {
+      state.ads.splice(state.ads.indexOf(ad), 1);
+      cards.delete(ad.id);
+      el.remove();
+      renderList();
+      save();
+    });
+    el.querySelector('.fb-text').addEventListener('click', e => { if (e.target.classList.contains('fb-more')) { card.open.fb = true; paint(ad); } });
+    el.querySelector('.ig-cap').addEventListener('click', e => { if (e.target.classList.contains('ig-more')) { card.open.ig = true; paint(ad); } });
+    return card;
+  }
+
+  function paint(ad) {
+    const card = cards.get(ad.id);
+    if (!card) return;
+    const el = card.el, q = s => el.querySelector(s);
+    const n = state.ads.indexOf(ad) + 1;
+    q('.ad-no').textContent = `Ad ${n}`;
+    for (const l of el.querySelectorAll('.pv-label')) l.dataset.ad = `Ad ${n}`;
+    q('.thumb img').src = ad.src;
+    const tall = ad.w / ad.h < 0.8 - 0.005, wide = ad.w / ad.h > 1.91 + 0.01;
+    q('.dims').innerHTML = `${ad.w}×${ad.h} · ${ratioName(ad.w, ad.h)}${tall ? '<br><span class="crop-note">Taller than 4:5, so the feed crops it</span>' : wide ? '<br><span class="crop-note">Wider than 1.91:1, so the feed crops it</span>' : ''}`;
+    const primary = ad.primary || '', headline = ad.headline || '', desc = ad.desc || '', cta = ad.cta || 'Learn more';
+    q('.n-primary').textContent = primary.length ? `${primary.length}` : '';
+    q('.n-headline').textContent = headline.length ? `${headline.length}` : '';
+    q('.n-desc').textContent = desc.length ? `${desc.length}` : '';
+    const ratio = shownRatio(ad.w, ad.h);
+    const showFb = state.show !== 'ig', showIg = state.show !== 'fb';
+    const notes = [], hlNotes = [];
+
+    // Facebook
+    avatar(q('.fb-av'));
+    q('.fb-name').textContent = state.brand.name || 'Your Page';
+    q('.fb-media').style.aspectRatio = ratio;
+    q('.fb-media img').src = ad.src;
+    const fbText = q('.fb-text');
+    fbText.hidden = !primary.trim();
+    if (showFb && primary.trim()) {
+      const fill = (t, cut) => {
+        fbText.replaceChildren(t);
+        if (cut) fbText.append(Object.assign(document.createElement('span'), { className: 'fb-more', textContent: '...See more' }));
+      };
+      if (card.open.fb) fill(primary, false);
+      else {
+        const shown = clampLines(fbText, primary, 3, 21, fill);
+        if (shown < primary.length) notes.push(`Facebook shows the first ${primary.slice(0, shown).trim().length} characters`);
+      }
+    }
+    const fbCta = q('.fb-cta'), hl = q('.fb-hl'), dsc = q('.fb-desc'), btn = q('.fb-btn');
+    fbCta.hidden = !headline.trim() && !desc.trim() && cta === 'No button';
+    btn.hidden = cta === 'No button';
+    btn.textContent = cta;
+    hl.hidden = !headline.trim();
+    if (showFb && headline.trim()) {
+      const shown = clampLines(hl, headline, 2, 24, (t, cut) => {
+        hl.replaceChildren(t);
+        if (cut) hl.append(Object.assign(document.createElement('span'), { className: 'fb-dots', textContent: '...' }));
+      });
+      if (shown < headline.length) hlNotes.push('Facebook cuts the headline off');
+    }
+    // The description only fits when the headline takes one line
+    dsc.textContent = desc;
+    const oneLine = !headline.trim() || hl.scrollHeight <= 25;
+    dsc.hidden = !desc.trim() || !oneLine;
+    if (showFb && desc.trim() && !oneLine) hlNotes.push('Facebook hides the description because the headline takes 2 lines');
+    else if (showFb && desc.trim() && dsc.scrollWidth > dsc.clientWidth + 1) hlNotes.push('Facebook cuts the description off');
+
+    // Instagram
+    avatar(q('.ig-av'));
+    const handle = (state.brand.ig || 'yourpage').replace(/^@/, '');
+    q('.ig-name').textContent = handle;
+    q('.ig-media').style.aspectRatio = ratio;
+    q('.ig-media img').src = ad.src;
+    q('.ig-cta').hidden = cta === 'No button';
+    q('.ig-cta span').textContent = cta;
+    const cap = q('.ig-cap');
+    if (!primary.trim()) cap.replaceChildren();
+    else if (showIg) {
+      const fill = (t, cut) => {
+        const b = document.createElement('b');
+        b.textContent = handle;
+        cap.replaceChildren(b, ' ', t);
+        if (cut) cap.append('... ', Object.assign(document.createElement('span'), { className: 'ig-more', textContent: 'more' }));
+      };
+      if (card.open.ig) fill(primary, false);
+      else {
+        const shown = clampLines(cap, primary, 2, 23, fill);
+        if (shown < primary.length) notes.push(`Instagram shows the first ${primary.slice(0, shown).trim().length}`);
+      }
+    }
+
+    const fp = q('.fit-primary'), fh = q('.fit-hl');
+    fp.textContent = notes.join(' · ');
+    fp.hidden = !notes.length;
+    fh.textContent = hlNotes.join(' · ');
+    fh.hidden = !hlNotes.length;
+    fh.classList.toggle('cut', hlNotes.length > 0);
+  }
+
+  /* ---------- Page ---------- */
+  function renderList() {
+    const els = state.ads.map(ad => (cards.get(ad.id) || buildCard(ad)).el);
+    ui.ads.replaceChildren(...els);
+    ui.toolbar.hidden = !state.ads.length;
+    ui.count.textContent = `${state.ads.length} ad${state.ads.length === 1 ? '' : 's'}`;
+    paintAll();
+  }
+  function paintAll() {
+    ui.ads.dataset.show = state.show;
+    ui.ads.classList.toggle('only', state.only);
+    for (const b of ui.show.querySelectorAll('button')) b.setAttribute('aria-pressed', String(b.dataset.show === state.show));
+    ui.only.checked = state.only;
+    for (const ad of state.ads) paint(ad);
+  }
+
+  async function addFiles(files) {
+    const imgs = [...files].filter(f => f.type.startsWith('image/'));
+    for (const f of imgs) {
+      try {
+        const img = await readImage(f, 1080);
+        state.ads.push({ id: uid(), ...img, primary: '', headline: '', desc: '', cta: 'Learn more', name: f.name });
+      } catch (e) { alert(`${f.name}: ${e.message}`); }
+    }
+    if (imgs.length) { renderList(); save(); }
+  }
+
+  ui.pageName.value = state.brand.name;
+  ui.igName.value = state.brand.ig;
+  avatar(ui.logoBox);
+  ui.pageName.addEventListener('input', () => { state.brand.name = ui.pageName.value; avatar(ui.logoBox); paintAll(); save(); });
+  ui.igName.addEventListener('input', () => { state.brand.ig = ui.igName.value; paintAll(); save(); });
+  ui.logoFile.addEventListener('change', async () => {
+    const file = ui.logoFile.files[0];
+    ui.logoFile.value = '';
+    if (!file) return;
+    try { state.brand.logo = (await readImage(file, 200)).src; avatar(ui.logoBox); paintAll(); save(); } catch (e) { alert(e.message); }
+  });
+  ui.files.addEventListener('change', () => { addFiles(ui.files.files); ui.files.value = ''; });
+  ui.drop.addEventListener('dragover', e => { e.preventDefault(); ui.drop.classList.add('over'); });
+  ui.drop.addEventListener('dragleave', () => ui.drop.classList.remove('over'));
+  ui.drop.addEventListener('drop', e => { e.preventDefault(); ui.drop.classList.remove('over'); addFiles(e.dataTransfer.files); });
+  document.addEventListener('paste', e => {
+    const files = [...(e.clipboardData?.files || [])].filter(f => f.type.startsWith('image/'));
+    if (files.length) { e.preventDefault(); addFiles(files); }
+  });
+  ui.show.addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; state.show = b.dataset.show; paintAll(); save(); });
+  ui.only.addEventListener('change', () => { state.only = ui.only.checked; paintAll(); save(); });
+  ui.clear.addEventListener('click', () => {
+    if (!confirm('Remove all ads?')) return;
+    state.ads = [];
+    cards.clear();
+    renderList();
+    save();
+  });
+
+  renderList();
+  document.fonts?.ready.then(paintAll);
+})();
+</script>
+</body>
+</html>
