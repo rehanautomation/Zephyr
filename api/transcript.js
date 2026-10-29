@@ -90,16 +90,12 @@ export default async function handler(req, res) {
     .map(n => process.env[n].trim())
     .filter(Boolean);
 
-  let lastErr;
-  for (let attempt = 0; attempt < 2; attempt++) {
-    try {
-      const out = keys.length ? await getViaSupadata(id, keys) : await getTranscript(id);
-      res.setHeader('Cache-Control', 's-maxage=86400, stale-while-revalidate');
-      return res.status(200).json(out);
-    } catch (e) {
-      lastErr = e;
-      if (e.status === 404 || e.status === 429) break; // no captions / out of credits: retrying won't help
-    }
+  // One attempt here; the page retries failed fetches (up to 3 times) so retries are never stacked
+  try {
+    const out = keys.length ? await getViaSupadata(id, keys) : await getTranscript(id);
+    res.setHeader('Cache-Control', 's-maxage=86400, stale-while-revalidate');
+    return res.status(200).json(out);
+  } catch (e) {
+    res.status(e.status || 502).json({ error: e.message || 'Could not reach YouTube' });
   }
-  res.status(lastErr.status || 502).json({ error: lastErr.message || 'Could not reach YouTube' });
 }

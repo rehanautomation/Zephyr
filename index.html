@@ -91,13 +91,15 @@
   .nav-btn.ig { color: #fff; border-color: transparent; background: linear-gradient(var(--bg), var(--bg)) padding-box, linear-gradient(135deg, #ff2e4d, #ff8a3d, #d62fd0) border-box; border: 1px solid transparent; }
   .nav-btn.ig:hover { background: linear-gradient(#1a1020, #1a1020) padding-box, linear-gradient(135deg, #ff2e4d, #ff8a3d, #d62fd0) border-box; }
   .nav-btn { white-space: nowrap; }
+  .nav-btn.ch { color: #fff; background: linear-gradient(var(--bg), var(--bg)) padding-box, linear-gradient(135deg, #ff2e4d, #ff5a73, #ffb03d) border-box; border: 1px solid transparent; }
+  .nav-btn.ch:hover, .nav-btn.ch[aria-current] { background: linear-gradient(#1f0f14, #1f0f14) padding-box, linear-gradient(135deg, #ff2e4d, #ff5a73, #ffb03d) border-box; }
   .nav-btn.ad { color: #fff; background: linear-gradient(var(--bg), var(--bg)) padding-box, linear-gradient(135deg, #1877f2, #8a5cff, #ff3d9a) border-box; border: 1px solid transparent; }
   .nav-btn.ad:hover { background: linear-gradient(#10122a, #10122a) padding-box, linear-gradient(135deg, #1877f2, #8a5cff, #ff3d9a) border-box; }
   @media (max-width: 440px) {
     .top { gap: 10px; }
     .nav { gap: 6px; }
     .nav-btn { padding: 0 11px; }
-    .nav-btn.ig svg, .nav-btn.ad svg { display: none; }
+    .nav-btn.ig svg, .nav-btn.ad svg, .nav-btn.ch svg { display: none; }
   }
   .promo {
     display: inline-flex; align-items: center; gap: 12px; margin-top: 18px; padding: 10px 14px 10px 10px;
@@ -423,6 +425,70 @@
   .run-actions .btn { height: 36px; padding: 0 12px; font-size: 13px; border-radius: 11px; }
   .run-actions .icon-btn { width: 36px; height: 36px; }
 
+  /* Channel picker */
+  .pick-chan { display: flex; align-items: center; gap: 14px; min-width: 0; }
+  .pick-chan img { width: 48px; height: 48px; flex: none; border-radius: 50%; object-fit: cover; background: #2a2531; border: 1px solid var(--line-2); }
+  .pick-chan img[src=""] { display: none; }
+  .pick-chan > div { min-width: 0; }
+  .pick-chan h2 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pick-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; padding-bottom: 96px; }
+  .tile {
+    position: relative; display: flex; flex-direction: column; gap: 8px; padding: 8px; border-radius: 18px; text-align: left;
+    border: 1px solid var(--line); background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.015));
+    cursor: pointer; user-select: none; -webkit-user-select: none;
+    transition: border-color .2s, background .2s, transform .15s;
+    animation: rise .5s cubic-bezier(.2,.8,.2,1) both; animation-delay: var(--d, 0ms);
+  }
+  .tile:hover { border-color: var(--line-2); }
+  .tile:active { transform: scale(.985); }
+  .tile:focus-visible { outline: 2px solid #ff8796; outline-offset: 2px; }
+  .tile .thumb { border-radius: 12px; transition: border-radius .2s; }
+  .tile .thumb img { transition: transform .25s cubic-bezier(.2,.7,.2,1); }
+  .tile .thumb::before { display: none; }
+  .tile[aria-pressed="true"] { border-color: rgba(255,90,115,.75); background: linear-gradient(180deg, rgba(255,46,77,.16), rgba(255,46,77,.05)); }
+  .tile[aria-pressed="true"] .thumb img { transform: scale(.9); border-radius: 10px; }
+  .tick {
+    position: absolute; left: 15px; top: 15px; z-index: 3; display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%;
+    border: 2px solid rgba(255,255,255,.9); background: rgba(10,8,14,.35); box-shadow: 0 2px 8px rgba(0,0,0,.5);
+    color: transparent; transition: background .15s, border-color .15s, scale .25s cubic-bezier(.3,1.6,.5,1);
+  }
+  .tick svg { width: 15px; height: 15px; }
+  .tile[aria-pressed="true"] .tick { background: var(--red); border-color: var(--red); color: #fff; scale: 1.08; }
+  .tile .badge { right: 6px; bottom: 6px; }
+  .tile-title { margin: 0 2px; font-size: 14px; font-weight: 600; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; min-height: 2.7em; }
+  .tile-meta { margin: 0 2px 2px; color: var(--faint); font: 12px var(--mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tile.sk { pointer-events: none; }
+  .tile.sk .thumb, .tile.sk .tile-title, .tile.sk .tile-meta {
+    background: linear-gradient(90deg, rgba(255,255,255,.04), rgba(255,255,255,.1), rgba(255,255,255,.04));
+    background-size: 200% 100%; animation: shimmer 1.3s linear infinite; border-radius: 8px; color: transparent;
+  }
+  .tile.sk .tile-title { min-height: 2.4em; width: 90%; }
+  .tile.sk .tile-meta { width: 50%; }
+  .pick-msg { padding: 36px 20px; border-radius: 20px; border: 1px dashed var(--line-2); text-align: center; color: var(--muted); }
+  .pick-msg .btn { margin-top: 14px; }
+  .pick-bar {
+    position: fixed; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom)); z-index: 40; translate: -50% 0;
+    display: flex; align-items: center; gap: 10px; width: min(560px, calc(100% - 32px)); padding: 10px 10px 10px 18px;
+    border-radius: 18px; border: 1px solid var(--line-2); background: rgba(22,18,30,.9);
+    -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); box-shadow: 0 24px 60px -12px rgba(0,0,0,.9);
+    animation: barin .35s cubic-bezier(.2,1.2,.3,1) both;
+  }
+  @keyframes barin { from { translate: -50% 140%; } }
+  .pick-bar .count { flex: 1; min-width: 0; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pick-bar .count .of { color: var(--faint); font-weight: 500; }
+  .pick-bar .count b { display: inline-grid; place-items: center; min-width: 26px; height: 26px; padding: 0 7px; margin-right: 6px; border-radius: 999px; background: var(--grad); color: #fff; font: 600 13px var(--mono); }
+  .pick-bar .btn { height: 42px; }
+  .has-picker .toast { bottom: calc(96px + env(safe-area-inset-bottom)); }
+  @media (max-width: 640px) {
+    .pick-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    .tile { padding: 6px; border-radius: 14px; }
+    .tile-title { font-size: 13px; }
+    .tile-meta { font-size: 11px; }
+    .pick-bar { padding-left: 14px; }
+    .pick-bar .count span { display: none; }
+    .pick-bar .btn { padding: 0 13px; }
+  }
+
   /* Toast */
   .toast {
     position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom)); z-index: 50;
@@ -498,6 +564,7 @@
       Zephyr
     </a>
     <nav class="nav">
+      <a class="nav-btn ch" id="navChannel" href="/channel"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><path d="m14.5 17.5 2 2 4-4"/></svg>Channel picker</a>
       <a class="nav-btn ig" href="/reels/"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><path d="M17.5 6.5v.01"/></svg>Instagram tool</a>
       <a class="nav-btn ad" href="/ads/"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/></svg>Ad preview</a>
       <button class="nav-btn" type="button" id="toRecent" hidden>Recent <span class="n"></span></button>
@@ -509,12 +576,12 @@
     <section class="hero">
       <div class="copy">
         <span class="eyebrow"><span class="live-dot"></span>YouTube → text, instantly</span>
-        <h1>Every word,<br><em>one click</em> away.</h1>
-        <p class="sub">Drop in YouTube links. Zephyr pulls every transcript so you can copy one, or all of them at once.</p>
+        <h1 id="heroTitle">Every word,<br><em>one click</em> away.</h1>
+        <p class="sub" id="heroSub">Drop in YouTube links, or a channel to pick videos from. Zephyr pulls every transcript so you can copy one, or all of them at once.</p>
         <form class="composer" id="form" novalidate>
           <div class="composer-inner">
             <label for="links" class="sr">YouTube links</label>
-            <textarea id="links" placeholder="Paste YouTube links here…" spellcheck="false" autocomplete="off" rows="3"></textarea>
+            <textarea id="links" placeholder="Paste YouTube links, or a channel link…" spellcheck="false" autocomplete="off" rows="3"></textarea>
             <div class="composer-bar">
               <div class="detected" id="detected"></div>
               <button class="go" type="submit" id="go">
@@ -525,7 +592,7 @@
             </div>
           </div>
         </form>
-        <p class="hint" id="hint">Works with youtube.com, youtu.be, Shorts and live links</p>
+        <p class="hint" id="hint">Video links, or a channel link to pick from its last 6 months</p>
         <a class="promo" href="/reels/">
           <span class="promo-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><path d="M17.5 6.5v.01"/></svg></span>
           <span class="promo-text"><b>New: Instagram reel breakdown</b><span>Frames, timestamps and sound hits, ready for Claude</span></span>
@@ -562,6 +629,28 @@
       </button>
     </section>
   </div>
+
+  <section class="section" id="picker" hidden>
+    <div class="section-head">
+      <div class="pick-chan">
+        <img id="pickAvatar" alt="" src="">
+        <div>
+          <h2 id="pickTitle">Pick <em>videos</em></h2>
+          <p class="section-sub" id="pickSub"></p>
+        </div>
+      </div>
+      <div class="head-actions">
+        <button class="btn" type="button" id="pickAll" disabled>Select all</button>
+        <button class="btn" type="button" id="pickClose">Cancel</button>
+      </div>
+    </div>
+    <div class="pick-grid" id="pickGrid"></div>
+    <div class="pick-bar" id="pickBar" hidden>
+      <p class="count" id="pickCount"></p>
+      <button class="btn" type="button" id="pickClear">Clear</button>
+      <button class="btn primary" type="button" id="pickGo"></button>
+    </div>
+  </section>
 
   <section class="section" id="results" hidden>
     <div class="section-head">
@@ -607,13 +696,17 @@ const ICON = {
 const KEY = 'zephyr:runs:v1';
 const MAX_RUNS = 6;      // the run on screen + the last 5 shown under Recent
 const MAX_PARALLEL = 3;
-const HINT = 'Works with youtube.com, youtu.be, Shorts and live links';
+let HINT = 'Video links, or a channel link to pick from its last 6 months';
+const RETRIES = 3;                                   // extra attempts after a failed API fetch
+const RETRYABLE = new Set([408, 425, 500, 502, 503, 504]); // statuses worth another try (not "no captions" or "out of credits")
 
 const $ = s => document.querySelector(s);
 const el = {
   form: $('#form'), input: $('#links'), detected: $('#detected'), goLabel: $('#goLabel'), kbd: $('#kbd'), hint: $('#hint'),
   results: $('#results'), grid: $('#grid'), resCount: $('#resCount'), copyAll: $('#copyAll'), newRun: $('#newRun'), progress: $('#progress'),
-  recent: $('#recent'), runs: $('#runs'), toRecent: $('#toRecent'), cue: $('#cue'), toast: $('#toast'), stage: $('#stage'), logo: $('#logo3d')
+  recent: $('#recent'), runs: $('#runs'),
+  picker: $('#picker'), pickGrid: $('#pickGrid'), pickTitle: $('#pickTitle'), pickSub: $('#pickSub'), pickAvatar: $('#pickAvatar'),
+  pickAll: $('#pickAll'), pickClose: $('#pickClose'), pickBar: $('#pickBar'), pickCount: $('#pickCount'), pickClear: $('#pickClear'), pickGo: $('#pickGo'), toRecent: $('#toRecent'), cue: $('#cue'), toast: $('#toast'), stage: $('#stage'), logo: $('#logo3d')
 };
 const finePointer = matchMedia('(hover: hover) and (pointer: fine)').matches;
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -656,6 +749,41 @@ function parseIds(text) {
   for (const m of text.matchAll(re)) if (!ids.includes(m[1])) ids.push(m[1]);
   return ids;
 }
+// A channel link (youtube.com/@handle, /channel/UC…, /c/name, /user/name) or a bare @handle
+function parseChannel(text) {
+  const s = text.trim();
+  const m = s.match(/(?:https?:\/\/)?(?:www\.|m\.)?youtube\.com\/(@[\w.\-%]+|channel\/UC[\w-]{22}|c\/[^/?#\s]+|user\/[^/?#\s]+)/i);
+  if (m) {
+    let label = m[1].replace(/^(channel|c|user)\//i, '');
+    try { label = decodeURIComponent(label); } catch {}
+    return { url: /^https?:/i.test(m[0]) ? m[0] : `https://${m[0]}`, label: label.startsWith('UC') ? 'channel' : label };
+  }
+  const b = s.match(/^@[\w.\-]{2,}$/);
+  return b ? { url: b[0], label: b[0] } : null;
+}
+
+// GET JSON from our API; network errors and temporary server errors are retried up to RETRIES times
+const wait = ms => new Promise(r => setTimeout(r, ms));
+async function getJSON(url, onRetry) {
+  for (let attempt = 0; ; attempt++) {
+    let err;
+    try {
+      const r = await fetch(url);
+      const d = await r.json().catch(() => null);
+      if (r.ok && d) return d;
+      err = new Error(d?.error || `Something went wrong (error ${r.status})`);
+      err.retry = !r.ok ? RETRYABLE.has(r.status) : true;
+    } catch {
+      err = new Error('Network error. Check your connection.');
+      err.retry = true;
+    }
+    if (!err.retry) throw err;
+    if (attempt >= RETRIES) { err.message += ` (tried ${RETRIES + 1} times)`; throw err; }
+    onRetry?.(attempt + 1);
+    await wait(1000 * 2 ** attempt + Math.random() * 400); // ~1s, 2s, 4s
+  }
+}
+
 const thumb = (id, q = 'hqdefault') => `https://i.ytimg.com/vi/${id}/${q}.jpg`;
 const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
 const runById = id => runs.find(r => r.id === id);
@@ -713,13 +841,21 @@ function flashDone(btn, label, restore) {
 let lastDetected = null;
 function updateDetected() {
   const ids = parseIds(el.input.value);
-  const key = ids.join();
+  const chan = ids.length ? null : parseChannel(el.input.value);
+  const key = chan ? `chan:${chan.url}` : ids.join();
   if (key === lastDetected) return;
   lastDetected = key;
   const n = ids.length;
+  if (chan) {
+    el.goLabel.textContent = 'Browse channel';
+    el.form.classList.add('armed');
+    el.detected.replaceChildren(Object.assign(document.createElement('span'), { className: 'detected-n', textContent: `Channel: ${chan.label}` }),
+      Object.assign(document.createElement('span'), { className: 'detected-empty', textContent: '· last 6 months' }));
+    return;
+  }
   el.goLabel.textContent = n > 1 ? `Get ${n} transcripts` : n === 1 ? 'Get transcript' : 'Get transcripts';
   el.form.classList.toggle('armed', n > 0);
-  if (!n) { el.detected.innerHTML = '<span class="detected-empty">One link or a whole list</span>'; return; }
+  if (!n) { el.detected.innerHTML = '<span class="detected-empty">Video links or a channel link</span>'; return; }
   const shown = ids.slice(0, 5);
   el.detected.innerHTML = `<span class="mini">${shown.map(id => `<img alt="" src="${thumb(id, 'default')}">`).join('')}${n > 5 ? `<b>+${n - 5}</b>` : ''}</span><span class="detected-n">${plural(n, 'video')} found</span>`;
   el.detected.querySelectorAll('img').forEach(hideBroken);
@@ -727,6 +863,14 @@ function updateDetected() {
 
 function submit() {
   const ids = parseIds(el.input.value);
+  const chan = ids.length ? null : parseChannel(el.input.value);
+  if (chan) {
+    el.input.value = '';
+    autosize();
+    updateDetected();
+    setHint();
+    return openPicker(chan);
+  }
   if (!ids.length) {
     setHint(el.input.value.trim() ? 'No YouTube links found in that text' : 'Paste a YouTube link first', true);
     el.form.classList.remove('shake');
@@ -775,6 +919,7 @@ function deleteRun(run) {
 }
 
 function showRun(run) {
+  if (!el.picker.hidden) closePicker();
   activeId = run.id;
   cards.clear();
   el.grid.replaceChildren(...run.ids.map((vid, i) => {
@@ -819,6 +964,135 @@ async function copyRun(run, btn, restore) {
   }
 }
 
+/* ---------- Channel picker ---------- */
+const picker = { req: 0, videos: [], sel: new Set(), last: -1 };
+
+function openPicker(chan) {
+  const req = ++picker.req;
+  if (activeId) closeRun(false);
+  picker.videos = [];
+  picker.sel.clear();
+  picker.last = -1;
+  el.picker.hidden = false;
+  document.body.classList.add('has-results', 'has-picker');
+  el.pickAvatar.src = '';
+  el.pickTitle.textContent = `Loading ${chan.label}`;
+  el.pickSub.textContent = 'Finding videos from the last 6 months';
+  el.pickAll.disabled = true;
+  el.pickBar.hidden = true;
+  el.pickGrid.replaceChildren(...Array.from({ length: 8 }, (_, i) => {
+    const t = document.createElement('div');
+    t.className = 'tile sk';
+    t.style.setProperty('--d', `${i * 40}ms`);
+    t.innerHTML = '<div class="thumb"></div><p class="tile-title">.</p><p class="tile-meta">.</p>';
+    return t;
+  }));
+  requestAnimationFrame(() => el.picker.scrollIntoView({ behavior: reducedMotion ? 'auto' : 'smooth', block: 'start' }));
+
+  getJSON(`/api/channel?url=${encodeURIComponent(chan.url)}`, n => {
+    if (req === picker.req) el.pickSub.textContent = `YouTube didn't answer, retrying (${n}/${RETRIES})`;
+  }).then(d => {
+    if (req === picker.req) renderPicker(d);
+  }).catch(e => {
+    if (req !== picker.req) return;
+    el.pickTitle.textContent = 'Couldn’t load that channel';
+    el.pickSub.textContent = chan.label;
+    const msg = document.createElement('div');
+    msg.className = 'pick-msg';
+    msg.append(Object.assign(document.createElement('p'), { textContent: e.message, style: 'margin:0' }));
+    const again = Object.assign(document.createElement('button'), { className: 'btn', type: 'button' });
+    again.innerHTML = `${ICON.redo}<span>Try again</span>`;
+    again.addEventListener('click', () => openPicker(chan));
+    msg.append(again);
+    el.pickGrid.replaceChildren(msg);
+  });
+}
+
+function renderPicker(d) {
+  const vids = d.videos || [];
+  picker.videos = vids;
+  el.pickTitle.textContent = d.channel?.title || 'Channel';
+  el.pickAvatar.src = d.channel?.avatar || '';
+  hideBroken(el.pickAvatar);
+  const notes = [`${plural(vids.length, 'video')} from the last ${d.months || 6} months`];
+  if (d.partial) notes.push(d.source === 'rss' ? 'only the latest 15 could be loaded' : 'showing the most recent ones');
+  el.pickSub.textContent = notes.join(' · ');
+  el.pickAll.disabled = !vids.length;
+  if (!vids.length) {
+    el.pickGrid.replaceChildren(Object.assign(document.createElement('div'), { className: 'pick-msg', textContent: 'No videos in the last 6 months on this channel.' }));
+    updatePickBar();
+    return;
+  }
+  el.pickGrid.replaceChildren(...vids.map((v, i) => {
+    const t = document.createElement('button');
+    t.type = 'button';
+    t.className = 'tile';
+    t.dataset.i = i;
+    t.setAttribute('aria-pressed', 'false');
+    t.style.setProperty('--d', `${Math.min(i, 12) * 35}ms`);
+    t.innerHTML = `<div class="thumb"><img alt="" loading="lazy" decoding="async" src="${thumb(v.id, 'mqdefault')}"><span class="badge"></span></div>
+      <span class="tick">${ICON.check}</span><p class="tile-title"></p><p class="tile-meta"></p>`;
+    t.querySelector('.badge').textContent = v.duration || '';
+    t.querySelector('.tile-title').textContent = v.title || 'YouTube video';
+    t.title = v.title || '';
+    const when = v.ago || (v.published ? new Date(v.published).toLocaleDateString() : '');
+    t.querySelector('.tile-meta').textContent = [when, v.views].filter(Boolean).join(' · ');
+    hideBroken(t.querySelector('img'));
+    return t;
+  }));
+  updatePickBar();
+}
+
+// Click toggles one video; Shift+click sets everything between the last click and this one
+function onTileClick(e) {
+  const t = e.target.closest('.tile:not(.sk)');
+  if (!t) return;
+  const i = +t.dataset.i;
+  const on = !picker.sel.has(picker.videos[i].id);
+  const [a, b] = e.shiftKey && picker.last >= 0 ? [Math.min(picker.last, i), Math.max(picker.last, i)] : [i, i];
+  for (let k = a; k <= b; k++) setPicked(k, on);
+  picker.last = i;
+  updatePickBar();
+}
+
+function setPicked(i, on) {
+  const id = picker.videos[i].id;
+  if (on) picker.sel.add(id); else picker.sel.delete(id);
+  el.pickGrid.querySelector(`.tile[data-i="${i}"]`)?.setAttribute('aria-pressed', String(on));
+}
+
+function pickAll(on) {
+  picker.videos.forEach((_, i) => setPicked(i, on));
+  updatePickBar();
+}
+
+function updatePickBar() {
+  const n = picker.sel.size, total = picker.videos.length;
+  el.pickBar.hidden = !n;
+  el.pickAll.textContent = n && n === total ? 'Deselect all' : 'Select all';
+  if (!n) return;
+  el.pickCount.innerHTML = `<b>${n}</b><span> selected</span><span class="of"> of ${total}</span>`;
+  el.pickGo.innerHTML = `${ICON.open}<span>Get ${n === 1 ? 'transcript' : `${n} transcripts`}</span>`;
+}
+
+function closePicker() {
+  picker.req++;
+  picker.videos = [];
+  picker.sel.clear();
+  el.picker.hidden = true;
+  el.pickBar.hidden = true;
+  el.pickGrid.replaceChildren();
+  document.body.classList.remove('has-picker');
+  if (!activeId) document.body.classList.remove('has-results');
+}
+
+function confirmPicked() {
+  const ids = picker.videos.map(v => v.id).filter(id => picker.sel.has(id)); // keep channel order, newest first
+  if (!ids.length) return;
+  closePicker();
+  startRun(ids);
+}
+
 /* ---------- Fetch queue ---------- */
 function enqueue(run, vid) {
   const key = `${run.id}:${vid}`;
@@ -839,13 +1113,15 @@ function pump() {
 async function load({ run, vid }) {
   if (!runs.includes(run) || !run.ids.includes(vid) || run.items[vid]) return;
   let item;
+  const showRetry = n => {
+    const label = run.id === activeId && cards.get(vid)?.querySelector('.copy span');
+    if (label) label.textContent = `Retrying (${n}/${RETRIES})`;
+  };
   try {
-    const r = await fetch(`/api/transcript?id=${encodeURIComponent(vid)}`);
-    const d = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(d.error || `Something went wrong (error ${r.status})`);
+    const d = await getJSON(`/api/transcript?id=${encodeURIComponent(vid)}`, showRetry);
     item = { title: d.title || '', author: d.author || '', words: d.words || 0, transcript: d.transcript || '' };
   } catch (e) {
-    item = { error: e instanceof TypeError ? 'Network error. Check your connection.' : e.message };
+    item = { error: e.message };
   }
   if (!runs.includes(run) || !run.ids.includes(vid)) return;
   run.items[vid] = item;
@@ -1051,11 +1327,30 @@ el.input.addEventListener('input', () => { autosize(); updateDetected(); if (el.
 el.form.addEventListener('animationend', e => { if (e.animationName === 'shake') el.form.classList.remove('shake'); });
 el.copyAll.addEventListener('click', () => { const run = activeRun(); if (run) copyRun(run, el.copyAll, updateHead); });
 el.newRun.addEventListener('click', () => closeRun());
+el.pickGrid.addEventListener('click', onTileClick);
+el.pickAll.addEventListener('click', () => pickAll(picker.sel.size !== picker.videos.length));
+el.pickClear.addEventListener('click', () => pickAll(false));
+el.pickGo.addEventListener('click', confirmPicked);
+el.pickClose.addEventListener('click', () => {
+  closePicker();
+  scrollTo({ top: 0, behavior: reducedMotion ? 'auto' : 'smooth' });
+  el.input.focus({ preventScroll: true });
+});
 const toRecent = () => el.recent.scrollIntoView({ behavior: reducedMotion ? 'auto' : 'smooth', block: 'start' });
 el.toRecent.addEventListener('click', toRecent);
 el.cue.addEventListener('click', toRecent);
 setInterval(() => { if (!el.recent.hidden) renderRecent(); }, 60000);
 
+// /channel: same tool, set up for pasting a channel link
+if (location.pathname.replace(/\/+$/, '') === '/channel') {
+  document.title = 'Zephyr Channels';
+  $('#navChannel').setAttribute('aria-current', 'page');
+  $('#heroTitle').innerHTML = 'Any channel,<br><em>pick</em> and pull.';
+  $('#heroSub').textContent = 'Paste a YouTube channel link. Pick videos from its last 6 months, and Zephyr pulls every transcript.';
+  el.input.placeholder = 'Paste a YouTube channel link, like youtube.com/@name';
+  HINT = 'Works with @handle, /channel/, /c/ and /user/ links';
+  setHint();
+}
 updateDetected();
 renderRecent();
 if (finePointer) el.input.focus({ preventScroll: true });
