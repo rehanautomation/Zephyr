@@ -91,13 +91,15 @@
   .nav-btn.ig { color: #fff; border-color: transparent; background: linear-gradient(var(--bg), var(--bg)) padding-box, linear-gradient(135deg, #ff2e4d, #ff8a3d, #d62fd0) border-box; border: 1px solid transparent; }
   .nav-btn.ig:hover { background: linear-gradient(#1a1020, #1a1020) padding-box, linear-gradient(135deg, #ff2e4d, #ff8a3d, #d62fd0) border-box; }
   .nav-btn { white-space: nowrap; }
+  .nav-btn.ch { color: #fff; background: linear-gradient(var(--bg), var(--bg)) padding-box, linear-gradient(135deg, #ff2e4d, #ff5a73, #ffb03d) border-box; border: 1px solid transparent; }
+  .nav-btn.ch:hover, .nav-btn.ch[aria-current] { background: linear-gradient(#1f0f14, #1f0f14) padding-box, linear-gradient(135deg, #ff2e4d, #ff5a73, #ffb03d) border-box; }
   .nav-btn.ad { color: #fff; background: linear-gradient(var(--bg), var(--bg)) padding-box, linear-gradient(135deg, #1877f2, #8a5cff, #ff3d9a) border-box; border: 1px solid transparent; }
   .nav-btn.ad:hover { background: linear-gradient(#10122a, #10122a) padding-box, linear-gradient(135deg, #1877f2, #8a5cff, #ff3d9a) border-box; }
   @media (max-width: 440px) {
     .top { gap: 10px; }
     .nav { gap: 6px; }
     .nav-btn { padding: 0 11px; }
-    .nav-btn.ig svg, .nav-btn.ad svg { display: none; }
+    .nav-btn.ig svg, .nav-btn.ad svg, .nav-btn.ch svg { display: none; }
   }
   .promo {
     display: inline-flex; align-items: center; gap: 12px; margin-top: 18px; padding: 10px 14px 10px 10px;
@@ -562,6 +564,7 @@
       Zephyr
     </a>
     <nav class="nav">
+      <a class="nav-btn ch" id="navChannel" href="/channel"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><path d="m14.5 17.5 2 2 4-4"/></svg>Channel picker</a>
       <a class="nav-btn ig" href="/reels/"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><path d="M17.5 6.5v.01"/></svg>Instagram tool</a>
       <a class="nav-btn ad" href="/ads/"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/></svg>Ad preview</a>
       <button class="nav-btn" type="button" id="toRecent" hidden>Recent <span class="n"></span></button>
@@ -573,8 +576,8 @@
     <section class="hero">
       <div class="copy">
         <span class="eyebrow"><span class="live-dot"></span>YouTube → text, instantly</span>
-        <h1>Every word,<br><em>one click</em> away.</h1>
-        <p class="sub">Drop in YouTube links, or a channel to pick videos from. Zephyr pulls every transcript so you can copy one, or all of them at once.</p>
+        <h1 id="heroTitle">Every word,<br><em>one click</em> away.</h1>
+        <p class="sub" id="heroSub">Drop in YouTube links, or a channel to pick videos from. Zephyr pulls every transcript so you can copy one, or all of them at once.</p>
         <form class="composer" id="form" novalidate>
           <div class="composer-inner">
             <label for="links" class="sr">YouTube links</label>
@@ -693,7 +696,7 @@ const ICON = {
 const KEY = 'zephyr:runs:v1';
 const MAX_RUNS = 6;      // the run on screen + the last 5 shown under Recent
 const MAX_PARALLEL = 3;
-const HINT = 'Video links, or a channel link to pick from its last 6 months';
+let HINT = 'Video links, or a channel link to pick from its last 6 months';
 const RETRIES = 3;                                   // extra attempts after a failed API fetch
 const RETRYABLE = new Set([408, 425, 500, 502, 503, 504]); // statuses worth another try (not "no captions" or "out of credits")
 
@@ -1338,6 +1341,16 @@ el.toRecent.addEventListener('click', toRecent);
 el.cue.addEventListener('click', toRecent);
 setInterval(() => { if (!el.recent.hidden) renderRecent(); }, 60000);
 
+// /channel: same tool, set up for pasting a channel link
+if (location.pathname.replace(/\/+$/, '') === '/channel') {
+  document.title = 'Zephyr Channels';
+  $('#navChannel').setAttribute('aria-current', 'page');
+  $('#heroTitle').innerHTML = 'Any channel,<br><em>pick</em> and pull.';
+  $('#heroSub').textContent = 'Paste a YouTube channel link. Pick videos from its last 6 months, and Zephyr pulls every transcript.';
+  el.input.placeholder = 'Paste a YouTube channel link, like youtube.com/@name';
+  HINT = 'Works with @handle, /channel/, /c/ and /user/ links';
+  setHint();
+}
 updateDetected();
 renderRecent();
 if (finePointer) el.input.focus({ preventScroll: true });
